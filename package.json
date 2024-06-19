@@ -3,9 +3,43 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "standard --fix",
+    "coverage:report": "c8 --reporter=html mocha test/unit/ --exit",
+    "coverage:report:log": "log=true c8 --reporter=html mocha test/unit/ --exit"
   },
   "author": "erickgonzalezdev",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@helia/http": "^1.0.5",
+    "@helia/unixfs": "^3.0.5",
+    "@libp2p/delegated-content-routing": "^4.0.11",
+    "axios": "^1.6.8",
+    "blockstore-fs": "^1.1.10",
+    "datastore-fs": "^9.1.8",
+    "file-type": "^19.0.0",
+    "glob": "^10.3.12",
+    "helia": "^4.1.2",
+    "install": "^0.13.0",
+    "kcors": "^2.2.2",
+    "koa": "^2.15.3",
+    "koa-bodyparser": "^4.4.1",
+    "koa-mount": "^4.0.0",
+    "koa-router": "^12.0.1",
+    "koa-send": "^5.0.1",
+    "koa-static": "^5.0.0",
+    "kubo-rpc-client": "^4.1.1",
+    "npm": "^10.7.0",
+    "public-ip": "^6.0.2",
+    "undici": "^6.14.1"
+  },
+  "devDependencies": {
+    "c8": "^9.1.0",
+    "chai": "^5.1.1",
+    "mocha": "^10.4.0",
+    "sinon": "^18.0.0",
+    "standard": "^17.1.0"
+  }
 }
