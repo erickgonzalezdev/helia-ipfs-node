@@ -466,8 +466,8 @@ class HeliaNode {
 
   // Pin a CID
   async pinCid (cid) {
-    if (!cid || typeof cid !== 'string') {
-      throw new Error('CID string is required.')
+    if (!cid ) {
+      throw new Error('CID is required.')
     }
 
     return new this.Promise(async (resolves, reject) => {
@@ -483,8 +483,8 @@ class HeliaNode {
 
   // UN-pin a CID
   async unPinCid (cid) {
-    if (!cid || typeof cid !== 'string') {
-      throw new Error('CID string is required.')
+    if (!cid ) {
+      throw new Error('CID is required.')
     }
     return new this.Promise(async (resolves, reject) => {
       try {

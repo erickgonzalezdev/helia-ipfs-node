@@ -400,7 +400,7 @@ describe('#Helia.js', () => {
 
         assert.fail('Unexpected result')
       } catch (err) {
-        assert.include(err.message, 'CID string is required.')
+        assert.include(err.message, 'CID is required.')
       }
     })
     it('should handle promises error', async () => {
@@ -432,39 +432,7 @@ describe('#Helia.js', () => {
 
         assert.fail('Unexpected result')
       } catch (err) {
-        assert.include(err.message, 'CID string is required.')
-      }
-    })
-    it('should handle promises error', async () => {
-      try {
-        sandbox.stub(uut.helia.pins, 'rm').throws(new Error('test error'))
-
-        await uut.unPinCid('cid')
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'test error')
-      }
-    })
-  })
-
-  describe('#unPinCid', () => {
-    it('should unpin cid', async () => {
-      try {
-        const cid = await uut.unPinCid('cid')
-        assert.exists(cid)
-      } catch (err) {
-        // console.log('Err',err)
-        assert.fail('Unexpected result')
-      }
-    })
-    it('should throw an error if input is not provided', async () => {
-      try {
-        await uut.unPinCid()
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'CID string is required.')
+        assert.include(err.message, 'CID is required.')
       }
     })
     it('should handle promises error', async () => {
