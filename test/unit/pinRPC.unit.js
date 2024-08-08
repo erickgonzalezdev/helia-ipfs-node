@@ -6,7 +6,7 @@ import { assert } from 'chai'
 import sinon from 'sinon'
 import { describe, it } from 'mocha'
 
-import pinRPC from '../../src/helia/pinRPC.js'
+import PinRPC from '../../src/helia/pinRPC.js'
 import HeliaNode from '../../src/helia/index.js'
 import createLibp2pMock from '../mocks/libp2p-mock.js'
 import createHeliaMock from '../mocks/helia-mock.js'
@@ -15,21 +15,25 @@ describe('#pinRPC.js', () => {
   let sandbox
   // let mockData
   let uut
+  let testLog = () => { }
+
 
   before(async () => {
     // Restore the sandbox before each test.
+    if (process.env.log) {
+      testLog = console.log
+    }
     sandbox = sinon.createSandbox()
 
-    const node = new HeliaNode()
+    const node = new HeliaNode({ log: testLog })
+    node.publicIp = async () => { return '192.168.1.1' }
     node.createHelia = createHeliaMock
     node.createLibp2p = createLibp2pMock
     await node.start()
 
-    uut = new pinRPC({ node, topic: 'test topic' })
+    uut = new PinRPC({ node, topic: 'test topic' })
 
-    if (!process.env.log) {
-      uut.log = () => { }
-    }
+
   })
 
   afterEach(() => sandbox.restore())
@@ -37,7 +41,8 @@ describe('#pinRPC.js', () => {
   describe('#contructor', () => {
     it('should throw error if node is not provided', async () => {
       try {
-        new pinRPC({ topic: 'test topic' })
+        const unit = new PinRPC({ topic: 'test topic' })
+        this.log(unit)
       } catch (err) {
         assert.include(err.message, 'Helia-IPFS-Node must be passed on pinRPC constructor')
       }
@@ -45,28 +50,31 @@ describe('#pinRPC.js', () => {
 
     it('should handle error if node pubsub is not provided', async () => {
       try {
-        const node = new HeliaNode()
+        const node = new HeliaNode({ log : testLog })
         node.createHelia = createHeliaMock
         node.createLibp2p = createLibp2pMock
+        node.publicIp = async () => { return '192.168.1.1' }
         await node.start()
 
         node.helia.libp2p.services = null
 
-        new pinRPC({ node, topic: 'test topic' })
+        const unit = new PinRPC({ node, topic: 'test topic' })
+        this.log(unit)
       } catch (err) {
-        console.log(err)
         assert.include(err.message, 'Service pubsub not found! on pinRPC constructor.')
       }
     })
 
     it('should handle error if topic property not provided', async () => {
       try {
-        const node = new HeliaNode()
+        const node = new HeliaNode({  log : testLog })
         node.createHelia = createHeliaMock
         node.createLibp2p = createLibp2pMock
+        node.publicIp = async () => { return '192.168.1.1' }
         await node.start()
 
-        new pinRPC({ node })
+        const unit = new PinRPC({ node })
+        this.log(unit)
       } catch (err) {
         assert.include(err.message, 'topic property must be passed on pinRPC constructor!')
       }

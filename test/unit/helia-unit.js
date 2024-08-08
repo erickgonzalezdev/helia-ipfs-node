@@ -21,6 +21,7 @@ describe('#Helia.js', () => {
     sandbox = sinon.createSandbox()
 
     uut = new HealiaNode()
+    uut.publicIp = async () => { return '192.168.1.1' }
     uut.createHelia = createHeliaMock
     uut.createLibp2p = createLibp2pMock
     if (!process.env.log) {

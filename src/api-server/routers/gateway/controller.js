@@ -9,6 +9,7 @@ export default class Gateway {
     this.getContent = this.getContent.bind(this)
     this.handleError = this.handleError.bind(this)
     this.setHelloWorld = this.setHelloWorld.bind(this)
+    this.log = this.node.log || console.log
   }
 
   async getContent (ctx) {
@@ -26,7 +27,7 @@ export default class Gateway {
           if (cont.name === name) {
             const content = await this.node.getContent(cont.cid.toString())
             const fileType = await fileTypeFromBuffer(content)
-            console.log('fileType', fileType)
+            this.log('fileType', fileType)
 
             ctx.type = 'text/plain; charset=utf-8'
             ctx.body = content
@@ -37,7 +38,6 @@ export default class Gateway {
         ctx.body = s
       }
 
-      console.log('isDir ', isDir)
       if (isDir) {
         for (let i = 0; i < contentArray.length; i++) {
           const cont = contentArray[i]
@@ -53,13 +53,12 @@ export default class Gateway {
         const content = await this.node.getContent(cid)
 
         const fileType = await fileTypeFromBuffer(content)
-        console.log('fileType', fileType)
+        this.log('fileType', fileType)
 
         ctx.type = 'text/plain; charset=utf-8'
         ctx.body = content
       }
     } catch (error) {
-      console.log(error)
       this.handleError(ctx, error)
     }
   }
@@ -70,10 +69,10 @@ export default class Gateway {
       for await (const file of this.node.ufs.ls(cid)) {
         files.push(file)
       }
-      console.log('files', files)
 
       return files
     } catch (error) {
+      this.log(error)
       throw error
     }
   }
@@ -83,6 +82,7 @@ export default class Gateway {
       const cid = await this.node.uploadStrOrObj('The gateway is ready!')
       return cid
     } catch (error) {
+      this.log(error)
       throw error
     }
   }

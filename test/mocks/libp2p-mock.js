@@ -1,13 +1,13 @@
 // Mocks for libp2p js package node module.
 class Pubsub {
-  constructor () {}
+  constructor (config) { this.config = config }
 
   async subscribe () { return true }
   async publish () { return true }
   async addEventListener () { return true }
 }
 class ContentRoutingMock {
-  constructor () {}
+  constructor (config) { this.config = config }
 
   async findProviders () { return true }
   async getConnections () { return [] }
