@@ -1,5 +1,4 @@
-// Mocks for unixfs
-
+// Mocks for unixfs js package node module.
 async function * mockIterable () {
   yield new Uint8Array('chunk1')
   yield new Uint8Array('chunk2')
