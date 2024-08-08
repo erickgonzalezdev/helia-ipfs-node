@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "standard --fix",
+    "lint": "standard --env mocha --fix",
     "coverage:report": "c8 --reporter=html mocha test/unit/ --exit",
     "coverage:report:log": "log=true c8 --reporter=html mocha test/unit/ --exit"
   },

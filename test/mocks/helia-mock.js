@@ -16,7 +16,7 @@ class PinsMock {
 }
 
 class BlockStoreMock {
-  constructor () { }
+  constructor (config) { this.config = config }
 
   async put () { return true }
 }

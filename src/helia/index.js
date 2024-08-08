@@ -67,11 +67,13 @@ class HeliaNode {
     this.helia = null
     this.ufs = null
     this.chain = null
+    this.ip4 = null
 
     this.start = this.start.bind(this)
     this.connect = this.connect.bind(this)
     this.upload = this.upload.bind(this)
     this.uploadDir = this.uploadDir.bind(this)
+
     // this.uploadObject = this.uploadObject.bind(this)
     // this.uploadString = this.uploadString.bind(this)
     this.uploadStrOrObj = this.uploadStrOrObj.bind(this)
@@ -86,7 +88,7 @@ class HeliaNode {
     this.getPins = this.getPins.bind(this)
     this.saveKey = this.saveKey.bind(this)
     this.readKey = this.readKey.bind(this)
-    this.log = inputOptions.logger || console.log
+    this.log = inputOptions.log || console.log
   }
 
   // Parse injected options
@@ -240,14 +242,15 @@ class HeliaNode {
         datastore,
         libp2p
       })
-      // Attempt to guess our ip4 IP address.
-      const ip4 = await this.publicIp()
-      let detectedMultiaddr = `/ip4/${ip4}/tcp/${options.tcpPort}/p2p/${this.peerId}`
-      detectedMultiaddr = this.multiaddr(detectedMultiaddr)
+      /*       // Attempt to guess our ip4 IP address.
+            const ip4 = await this.publicIp()
+            this.ip4 = ip4
+
+            let detectedMultiaddr = `/ip4/${ip4}/tcp/${options.tcpPort}/p2p/${this.peerId}`
+            detectedMultiaddr = this.multiaddr(detectedMultiaddr) */
 
       // Get the multiaddrs for the node.
-      const multiaddrs = this.getMultiAddress()
-      multiaddrs.push(detectedMultiaddr)
+      const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
 
       this.ufs = this.unixfs(this.helia)
@@ -269,6 +272,7 @@ class HeliaNode {
       await this.helia.libp2p.dial(multiaddr(addr))
       return true
     } catch (err) {
+      this.log('Error helia connect()  ', err)
       throw err
     }
   }
@@ -455,16 +459,28 @@ class HeliaNode {
 
       return Buffer.concat(chunks)
     } catch (error) {
+      this.log('Error helia getContent()  ', error)
       throw error
     }
   }
 
   // Get node multi addresses
   // TODO :  add public ip multi address
-  getMultiAddress () {
+  async getMultiAddress () {
     try {
-      return this.helia.libp2p.getMultiaddrs()
+      // Attempt to guess our ip4 IP address.
+
+      const multiaddrs = this.helia.libp2p.getMultiaddrs()
+      const ip4 = await this.publicIp()
+      this.ip4 = ip4
+
+      let detectedMultiaddr = `/ip4/${ip4}/tcp/${this.opts.tcpPort}/p2p/${this.peerId}`
+      detectedMultiaddr = this.multiaddr(detectedMultiaddr)
+      multiaddrs.push(detectedMultiaddr)
+
+      return multiaddrs
     } catch (error) {
+      this.log('Error helia getMultiAddress()  ', error)
       throw error
     }
   }
@@ -481,6 +497,7 @@ class HeliaNode {
           resolves(CID)
         }
       } catch (error) {
+        this.log('Error in pinCid()', error)
         reject(error)
       }
     })
@@ -497,6 +514,7 @@ class HeliaNode {
           resolves(CID)
         }
       } catch (error) {
+        this.log('Error in unPinCid()', error)
         reject(error)
       }
     })
@@ -513,6 +531,7 @@ class HeliaNode {
 
         resolves(pins)
       } catch (error) {
+        this.log('Error in getPins()', error)
         reject(error)
       }
     })
@@ -557,6 +576,7 @@ class HeliaNode {
           return resolve(data.toString())
         })
       } catch (err) {
+        this.log('Error in readKey()', err)
         return reject(err)
       }
     })

@@ -38,7 +38,7 @@ class PinRPC {
     this.node = config.node
     this.topic = config.topic
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
-    this.log = this.node.log || console.log()
+    this.log = this.node.log || console.log
 
     // Bind all functions
     this.start = this.start.bind(this)
@@ -77,6 +77,7 @@ class PinRPC {
 
       return true
     } catch (error) {
+      this.log('Error in pinRPC/requestRemotePin()', error)
       throw error
     }
   }
@@ -148,7 +149,7 @@ class PinRPC {
       }
       return 'invalid protocol'
     } catch (error) {
-      console.log(error)
+      this.log('Error in pinRPC/parseMsgProtocol()', error)
       throw error
     }
   }

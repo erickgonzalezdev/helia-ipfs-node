@@ -9,8 +9,9 @@ import Routers from './routers/index.js'
 
 class Server {
   constructor (config = {}) {
-    this.dependecyValidators(config)
-
+    if (!config.node) {
+      throw new Error('Helia-IPFS-Node must be passed on Gateway constructor')
+    }
     // this.heliaWrapper = config.heliaWrapper
     this.port = config.port || 8085
     config.port = this.port
@@ -31,14 +32,6 @@ class Server {
     app.listen(this.port)
 
     console.log(`Server started on port : ${this.port}`)
-  }
-
-  async dependecyValidators (config = {}) {
-    const { node } = config
-
-    if (!node) {
-      throw new Error('Helia-IPFS-Node must be passed on Gateway constructor')
-    }
   }
 }
 
