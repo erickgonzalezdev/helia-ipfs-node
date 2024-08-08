@@ -34,6 +34,8 @@ import crypto from 'crypto'
 import { identify } from '@libp2p/identify'
 import { publicIpv4 } from 'public-ip'
 
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+
 // default is to use ipfs.io
 const client = createIpfsHttpClient({
   // use default api settings
@@ -194,6 +196,8 @@ class HeliaNode {
         ],
         services: {
           identify: identify(),
+          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+
           /*        lanDHT: kadDHT({
                    protocol: '/ipfs/lan/kad/1.0.0',
                    clientMode: false
@@ -456,6 +460,7 @@ class HeliaNode {
   }
 
   // Get node multi addresses
+  // TODO :  add public ip multi address
   getMultiAddress () {
     try {
       return this.helia.libp2p.getMultiaddrs()
@@ -466,7 +471,7 @@ class HeliaNode {
 
   // Pin a CID
   async pinCid (cid) {
-    if (!cid ) {
+    if (!cid) {
       throw new Error('CID is required.')
     }
 
@@ -483,7 +488,7 @@ class HeliaNode {
 
   // UN-pin a CID
   async unPinCid (cid) {
-    if (!cid ) {
+    if (!cid) {
       throw new Error('CID is required.')
     }
     return new this.Promise(async (resolves, reject) => {

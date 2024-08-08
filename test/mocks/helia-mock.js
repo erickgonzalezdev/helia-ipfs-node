@@ -1,4 +1,4 @@
-// Mocks for helia
+// Mocks for helia js package node module.
 async function * mockIterable () {
   yield new Uint8Array('chunk1')
   yield new Uint8Array('chunk2')

@@ -13,6 +13,7 @@
   "author": "erickgonzalezdev",
   "license": "ISC",
   "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^13.1.0",
     "@helia/http": "^1.0.5",
     "@helia/unixfs": "^3.0.5",
     "@libp2p/delegated-content-routing": "^4.0.11",
