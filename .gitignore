@@ -1,4 +1,8 @@
 node_modules
 node_modules
 helia-data/*
+helia2/*
 coverage/*
+index.js
+index2.js
+massive-pin-example.js

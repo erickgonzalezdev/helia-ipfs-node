@@ -19,6 +19,7 @@ class BlockStoreMock {
   constructor (config) { this.config = config }
 
   async put () { return true }
+  async get () { return true }
 }
 
 class HeliaMock {

@@ -465,7 +465,6 @@ class HeliaNode {
   }
 
   // Get node multi addresses
-  // TODO :  add public ip multi address
   async getMultiAddress () {
     try {
       // Attempt to guess our ip4 IP address.
@@ -493,6 +492,7 @@ class HeliaNode {
 
     return new this.Promise(async (resolves, reject) => {
       try {
+        await this.getContent(cid.toString())
         for await (const CID of this.helia.pins.add(cid)) {
           resolves(CID)
         }
