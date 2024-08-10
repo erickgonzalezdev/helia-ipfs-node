@@ -10,13 +10,13 @@ import PinRPC from '../../src/helia/pinRPC.js'
 import HeliaNode from '../../src/helia/index.js'
 import createLibp2pMock from '../mocks/libp2p-mock.js'
 import createHeliaMock from '../mocks/helia-mock.js'
+import PQueueMock from '../mocks/p-queue-mock.js'
 
 describe('#pinRPC.js', () => {
   let sandbox
   // let mockData
   let uut
   let testLog = () => { }
-
 
   before(async () => {
     // Restore the sandbox before each test.
@@ -32,8 +32,7 @@ describe('#pinRPC.js', () => {
     await node.start()
 
     uut = new PinRPC({ node, topic: 'test topic' })
-
-
+    uut.pinQueue = new PQueueMock()
   })
 
   afterEach(() => sandbox.restore())
@@ -50,7 +49,7 @@ describe('#pinRPC.js', () => {
 
     it('should handle error if node pubsub is not provided', async () => {
       try {
-        const node = new HeliaNode({ log : testLog })
+        const node = new HeliaNode({ log: testLog })
         node.createHelia = createHeliaMock
         node.createLibp2p = createLibp2pMock
         node.publicIp = async () => { return '192.168.1.1' }
@@ -67,7 +66,7 @@ describe('#pinRPC.js', () => {
 
     it('should handle error if topic property not provided', async () => {
       try {
-        const node = new HeliaNode({  log : testLog })
+        const node = new HeliaNode({ log: testLog })
         node.createHelia = createHeliaMock
         node.createLibp2p = createLibp2pMock
         node.publicIp = async () => { return '192.168.1.1' }
@@ -177,9 +176,93 @@ describe('#pinRPC.js', () => {
       }
     })
   })
+  describe('#addToQueue', () => {
+    it('should add pin to queue', async () => {
+      try {
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const result = uut.addToQueue(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should handle Error', async () => {
+      try {
+        sandbox.stub(uut.pinQueue, 'add').throws(new Error('Test Error'))
+
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        uut.addToQueue(inObj)
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        assert.include(err.message, 'Test Error')
+      }
+    })
+  })
+
+  describe('#handlePin', () => {
+    it('should handle Pin', async () => {
+      try {
+        sandbox.stub(uut.node, 'pinCid').resolves(true)
+
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const result = await uut.handlePin(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should  skip "already pin" error', async () => {
+      try {
+        sandbox.stub(uut.node, 'pinCid').throws(new Error('already pinned'))
+
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const result = await uut.handlePin(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should throw error if cid is not provided', async () => {
+      try {
+        const inObj = {
+          fromPeerId: 'peerId'
+        }
+        await uut.handlePin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'cid string is required')
+      }
+    })
+
+    it('should throw error if fromPeerId is not provided', async () => {
+      try {
+        const inObj = {
+          cid: 'content id'
+        }
+        await uut.handlePin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'fromPeerId string is required')
+      }
+    })
+  })
 
   describe('#parseMsgProtocol', () => {
-    it('should handle action "remote-pin" action', async () => {
+    it('should handle "remote-pin" action', async () => {
       try {
         uut.node.peerId = 'node peer id'
         const msgData = {
@@ -300,7 +383,7 @@ describe('#pinRPC.js', () => {
 
     it('should handle pin Error', async () => {
       try {
-        sandbox.stub(uut.node, 'pinCid').throws(new Error('Test Error'))
+        sandbox.stub(uut, 'addToQueue').throws(new Error('Test Error'))
 
         uut.node.peerId = 'node peer id 2'
         const msgData = {

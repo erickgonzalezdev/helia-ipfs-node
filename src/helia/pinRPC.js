@@ -23,6 +23,7 @@
  * }
  */
 import { CID } from 'multiformats/cid'
+import PQueue from 'p-queue'
 
 class PinRPC {
   constructor (config = {}) {
@@ -40,12 +41,16 @@ class PinRPC {
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
     this.log = this.node.log || console.log
 
+    this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 2 })
+
     // Bind all functions
     this.start = this.start.bind(this)
     this.requestRemotePin = this.requestRemotePin.bind(this)
     this.listen = this.listen.bind(this)
     this.parseMsgProtocol = this.parseMsgProtocol.bind(this)
     this.defaultRemotePinCallback = this.defaultRemotePinCallback.bind(this)
+    this.addToQueue = this.addToQueue.bind(this)
+    this.handlePin = this.handlePin.bind(this)
   }
 
   async start () {
@@ -82,30 +87,6 @@ class PinRPC {
     }
   }
 
-  /*   listen() {
-    try {
-      this.node.helia.libp2p.services.pubsub.addEventListener('message', (message) => {
-
-        try {
-          if (message.detail.topic !== this.topic) return
-
-          const msgStr = new TextDecoder().decode(message.detail.data)
-          const msgObj = JSON.parse(msgStr)
-          this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
-
-          this.parseMsgProtocol(msgObj)
-
-        } catch (error) {
-          this.log(`Error on pinRPC/listen() callback`)
-          // Skip error
-        }
-      })
-    } catch (error) {
-      this.log(`Error on pinRPC/listen()`)
-      throw error
-
-    }
-  } */
   listen () {
     try {
       this.node.helia.libp2p.services.pubsub.addEventListener('message', this.parseMsgProtocol)
@@ -121,27 +102,14 @@ class PinRPC {
       const msgStr = new TextDecoder().decode(message.detail.data)
       const msgObj = JSON.parse(msgStr)
       this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
-      const { fromPeerId, cid, msgType, toPeerId } = msgObj
+      const { cid, msgType, toPeerId } = msgObj
 
       if (toPeerId !== this.node.peerId.toString()) return 'destination peerId does not match'
 
       if (msgType === 'remote-pin') {
-        try {
-          await this.node.pinCid(CID.parse(cid))
-        } catch (error) {
-          if (!error.message.toLowerCase().match('already')) throw error
-        }
-        const responseMsg = {
-          msgType: 'success-pin',
-          toPeerId: fromPeerId,
-          fromPeerId: this.node.peerId.toString(),
-          cid
-
-        }
-        this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+        this.addToQueue(msgObj)
         return true
       }
-
       //
       if (msgType === 'success-pin') {
         this.onSuccessRemotePin({ cid, host: this.node.peerId.toString() })
@@ -154,40 +122,50 @@ class PinRPC {
     }
   }
 
-  /*
-    async parseMsgProtocol(inOBj = {}) {
-      const { fromPeerId, cid, msgType, toPeerId } = inOBj
-      try {
-
-        if (toPeerId !== this.node.peerId.toString()) return
-
-        if (msgType === 'remote-pin') {
-          try {
-            await this.node.pinCid(CID.parse(cid))
-          } catch (error) {
-            if (!error.message.toLowerCase().match('already')) throw error
-          }
-          const responseMsg = {
-            msgType: 'success-pin',
-            toPeerId: fromPeerId,
-            fromPeerId: this.node.peerId.toString(),
-            cid
-
-          }
-          this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
-
-        }
-
-        //
-        if (msgType === 'success-pin') {
-          this.onSuccessRemotePin({ cid, host: this.node.peerId.toString() })
-        }
-
-      } catch (error) {
-        throw error
-      }
+  addToQueue (inObj = {}) {
+    try {
+      /**
+       * Validte fi cid is already on queue
+     */
+      this.log(`Adding pin to queue for cid ${inObj.cid}`)
+      this.pinQueue.add(async () => { await this.handlePin(inObj) })
+      return true
+    } catch (error) {
+      this.log('Error on PinRPC/addToQueue', error)
+      throw error
     }
-   */
+  }
+
+  async handlePin (inObj = {}) {
+    try {
+      const { fromPeerId, cid } = inObj
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
+      if (!fromPeerId || typeof fromPeerId !== 'string') throw new Error('fromPeerId string is required!')
+
+      try {
+        this.log(`Trying to download and pin cid ${cid} on queue`)
+        await this.node.pinCid(CID.parse(cid))
+      } catch (error) {
+        this.log(`Error Trying to download and pin cid ${cid}`)
+        if (!error.message.toLowerCase().match('already')) throw error
+      }
+
+      this.log('Publish pin success notification')
+      const responseMsg = {
+        msgType: 'success-pin',
+        toPeerId: fromPeerId,
+        fromPeerId: this.node.peerId.toString(),
+        cid
+
+      }
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      return true
+    } catch (error) {
+      this.log('Error on PinRPC/handlePin()', error)
+      throw error
+    }
+  }
+
   defaultRemotePinCallback (inObj = {}) {
     this.log(`Success remote pin cid  : ${inObj.cid} on ${inObj.host} `)
   }
