@@ -5,7 +5,7 @@ import bodyParser from 'koa-bodyparser'
 import serve from 'koa-static'
 import mount from 'koa-mount'
 
-import Routers from './routers/index.js'
+import Routers from './routers/controller.js'
 
 class Server {
   constructor (config = {}) {
