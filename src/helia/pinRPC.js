@@ -24,6 +24,7 @@
  */
 import { CID } from 'multiformats/cid'
 import PQueue from 'p-queue'
+import { sleep } from '../util/util.js'
 
 class PinRPC {
   constructor (config = {}) {
@@ -42,7 +43,8 @@ class PinRPC {
     this.log = this.node.log || console.log
 
     this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 2 })
-
+    this.onQueue = []
+    this.sleep = sleep
     // Bind all functions
     this.start = this.start.bind(this)
     this.requestRemotePin = this.requestRemotePin.bind(this)
@@ -51,6 +53,7 @@ class PinRPC {
     this.defaultRemotePinCallback = this.defaultRemotePinCallback.bind(this)
     this.addToQueue = this.addToQueue.bind(this)
     this.handlePin = this.handlePin.bind(this)
+    this.deleteFromQueueArray = this.deleteFromQueueArray.bind(this)
   }
 
   async start () {
@@ -124,9 +127,12 @@ class PinRPC {
 
   addToQueue (inObj = {}) {
     try {
-      /**
-       * Validte fi cid is already on queue
-     */
+      const alreadyInQueue = this.onQueue.find((val) => { return val === inObj.cid })
+      if (alreadyInQueue) {
+        this.log(`cid already on queue : ${inObj.cid}`)
+        return true
+      }
+      this.onQueue.push(inObj.cid)
       this.log(`Adding pin to queue for cid ${inObj.cid}`)
       this.pinQueue.add(async () => { await this.handlePin(inObj) })
       return true
@@ -159,9 +165,26 @@ class PinRPC {
 
       }
       this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.deleteFromQueueArray(inObj.cid)
       return true
     } catch (error) {
+      this.deleteFromQueueArray(inObj.cid)
       this.log('Error on PinRPC/handlePin()', error)
+      throw error
+    }
+  }
+
+  deleteFromQueueArray (cid) {
+    try {
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
+      const cidIndex = this.onQueue.findIndex((val) => { return val === cid })
+      if (cidIndex >= 0) {
+        this.onQueue.splice(cidIndex, 1)
+        return true
+      }
+      return false
+    } catch (error) {
+      this.log('Error on PinRPC/deleteFromQueueArray()', error)
       throw error
     }
   }

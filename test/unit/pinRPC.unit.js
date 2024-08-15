@@ -189,18 +189,52 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
+    it('should return true if cid already exist on queue', async () => {
+      try {
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        uut.onQueue.push(inObj.cid)
+
+        const result = uut.addToQueue(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
     it('should handle Error', async () => {
       try {
         sandbox.stub(uut.pinQueue, 'add').throws(new Error('Test Error'))
 
         const inObj = {
           fromPeerId: 'peerId',
-          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk71'
         }
         uut.addToQueue(inObj)
         assert.fail('Unexpected code path')
       } catch (err) {
         assert.include(err.message, 'Test Error')
+      }
+    })
+  })
+  describe('#deleteFromQueueArray', () => {
+    it('should delete cid from queue array', async () => {
+      try {
+        const cid = 'contentId1234'
+        uut.onQueue.push(cid)
+        const result = uut.deleteFromQueueArray(cid)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should handle Error', async () => {
+      try {
+        uut.deleteFromQueueArray()
+        assert.fail('Unexpected code path')
+      } catch (err) {
+        assert.include(err.message, 'cid string is required')
       }
     })
   })
