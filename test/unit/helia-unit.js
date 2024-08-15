@@ -6,7 +6,7 @@ import { assert } from 'chai'
 import sinon from 'sinon'
 import { describe, it } from 'mocha'
 
-import HealiaNode from '../../src/helia/index.js'
+import HealiaNode from '../../src/helia/node.js'
 import createLibp2pMock from '../mocks/libp2p-mock.js'
 import createHeliaMock from '../mocks/helia-mock.js'
 import unixfsMock from '../mocks/unixFs-mock.js'

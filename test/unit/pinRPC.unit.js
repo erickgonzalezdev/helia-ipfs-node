@@ -7,7 +7,7 @@ import sinon from 'sinon'
 import { describe, it } from 'mocha'
 
 import PinRPC from '../../src/helia/pinRPC.js'
-import HeliaNode from '../../src/helia/index.js'
+import HeliaNode from '../../src/helia/node.js'
 import createLibp2pMock from '../mocks/libp2p-mock.js'
 import createHeliaMock from '../mocks/helia-mock.js'
 import PQueueMock from '../mocks/p-queue-mock.js'
