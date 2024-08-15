@@ -493,6 +493,8 @@ class HeliaNode {
     return new this.Promise(async (resolves, reject) => {
       try {
         await this.getContent(cid.toString())
+        this.log('Content downloaded!')
+        this.log('Pining content.!')
         for await (const CID of this.helia.pins.add(cid)) {
           resolves(CID)
         }
