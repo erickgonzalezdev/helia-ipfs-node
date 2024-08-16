@@ -54,8 +54,11 @@ export default class Gateway {
 
         const fileType = await fileTypeFromBuffer(content)
         this.log('fileType', fileType)
-
-        ctx.type = 'text/plain; charset=utf-8'
+        let contentType = 'text/plain; charset=utf-8'
+        if (fileType && fileType.mime) {
+          contentType = fileType.mime
+        }
+        ctx.type = contentType
         ctx.body = content
       }
     } catch (error) {
