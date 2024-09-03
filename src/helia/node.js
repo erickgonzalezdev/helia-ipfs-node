@@ -68,6 +68,7 @@ class HeliaNode {
     this.ufs = null
     this.chain = null
     this.ip4 = null
+    this.addresses = [] // node multi address
 
     this.start = this.start.bind(this)
     this.connect = this.connect.bind(this)
@@ -476,6 +477,8 @@ class HeliaNode {
       let detectedMultiaddr = `/ip4/${ip4}/tcp/${this.opts.tcpPort}/p2p/${this.peerId}`
       detectedMultiaddr = this.multiaddr(detectedMultiaddr)
       multiaddrs.push(detectedMultiaddr)
+
+      this.addresses = multiaddrs
 
       return multiaddrs
     } catch (error) {
