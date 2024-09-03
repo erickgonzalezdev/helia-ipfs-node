@@ -117,7 +117,7 @@ class PinRPC {
       const msg = JSON.stringify(inObj)
       this.log(`Publishing ${msg} to  ${this.topic}`)
 
-      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msg))
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
 
       return true
     } catch (error) {
