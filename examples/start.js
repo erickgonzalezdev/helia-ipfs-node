@@ -16,7 +16,7 @@ const start = async () => {
 
   // Connections
 
-  const node2 = new HeliaNode({ wsPort: 4011, tcpPort: 4012, storePath: 'data-path' })
+  const node2 = new HeliaNode({ alias: 'my second node', wsPort: 4011, tcpPort: 4012, storePath: 'data-path' })
   await node2.start()
 
   // Connect nodes
