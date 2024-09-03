@@ -100,7 +100,8 @@ class HeliaNode {
       tcpPort: this.opts.tcpPort || 4001,
       wsPort: this.opts.wsPort || 4002,
       announceAddresses: this.opts.announceAddresses || [],
-      bootstrapList: this.opts.bootstrapList || bootstrapConfig
+      bootstrapList: this.opts.bootstrapList || bootstrapConfig,
+      alias: this.opts.alias
     }
 
     let existingKey
@@ -156,6 +157,7 @@ class HeliaNode {
         await this.chain.createKey(options.nodeKey, 'Ed25519', 4096)
         peerId = await this.chain.exportPeerId(options.nodeKey)
       } else {
+        this.log('Loading existing node', existingKey)
         peerId = await this.chain.exportPeerId(existingKey.name)
       }
 
@@ -258,6 +260,7 @@ class HeliaNode {
 
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)
 
+      this.log(`Node Alias : ${this.opts.alias}`)
       return this.helia
     } catch (error) {
       this.log('error in helia/start()', error)
