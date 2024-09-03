@@ -92,7 +92,8 @@ class PinRPC {
           msgType: 'notify-subscription',
           timeStamp: new Date().getTime(),
           peerId: this.node.peerId,
-          multiAddress: this.node.addresses
+          multiAddress: this.node.addresses,
+          alias: this.node.opts.alias
         }
         const msgStr = JSON.stringify(msg)
         this.log('Sending notify-subscription')
@@ -274,13 +275,14 @@ class PinRPC {
 
   updateSubscriptionList (msg = {}) {
     try {
-      const { peerId, multiAddress, timeStamp } = msg
+      const { peerId, multiAddress, timeStamp, alias } = msg
       if (!peerId || typeof peerId !== 'string') throw new Error('peerId is required')
       if (!Array.isArray(multiAddress)) throw new Error('multiAddress must be an array of addresses')
 
       const exist = this.subscriptionList.find((value) => { return peerId === value.peerId })
       if (exist) return false
       this.subscriptionList.push({
+        alias,
         peerId,
         multiAddress,
         timeStamp: timeStamp || new Date().getTime()
