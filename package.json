@@ -21,6 +21,7 @@
     "blockstore-fs": "^1.1.10",
     "datastore-fs": "^9.1.8",
     "file-type": "^19.0.0",
+    "get-folder-size": "^5.0.0",
     "glob": "^10.3.12",
     "helia": "^4.1.2",
     "install": "^0.13.0",

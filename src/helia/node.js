@@ -35,6 +35,7 @@ import { identify } from '@libp2p/identify'
 import { publicIpv4 } from 'public-ip'
 
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import getFolderSize from 'get-folder-size'
 
 // default is to use ipfs.io
 const client = createIpfsHttpClient({
@@ -63,6 +64,7 @@ class HeliaNode {
     this.opts = inputOptions
     this.peerId = null
     this.KeyPath = 'node-key.json'
+    this.getFolderSize = getFolderSize
 
     this.helia = null
     this.ufs = null
@@ -89,6 +91,8 @@ class HeliaNode {
     this.getPins = this.getPins.bind(this)
     this.saveKey = this.saveKey.bind(this)
     this.readKey = this.readKey.bind(this)
+    this.getDiskSize = this.getDiskSize.bind(this)
+
     this.log = inputOptions.log || console.log
   }
 
@@ -588,6 +592,18 @@ class HeliaNode {
         return reject(err)
       }
     })
+  }
+
+  async getDiskSize () {
+    try {
+      const size = await this.getFolderSize.strict(this.opts.storePath)
+      const mbSize = (size / 1000 / 1000).toFixed(2)
+      this.log(`Node size :  ${mbSize} MB`)
+      return mbSize
+    } catch (err) {
+      this.log('Error in getDiskSize()', err)
+      return false
+    }
   }
 }
 
