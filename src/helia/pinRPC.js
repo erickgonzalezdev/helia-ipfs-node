@@ -26,7 +26,7 @@
  *
  * Notification message :
  * {
- *   msgType: 'notify-subscription',
+ *   msgType: 'notify-state',
  *   timeStamp: 'current time stamp',
  *   peerId: 'sender node peer id',
  *   multiAddress: 'sender node multi addresses'
@@ -73,7 +73,13 @@ class PinRPC {
     this.getSubscriptionList = this.getSubscriptionList.bind(this)
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
-    this.notificationTimer = 30000
+    this.notificationTimer = 60000
+
+    // node disk stats
+    this.diskStats = {
+      size: 0, // mb
+      timeStamp: new Date().getTime() // last disk update
+    }
   }
 
   async start () {
@@ -87,16 +93,20 @@ class PinRPC {
       this.listen()
 
       // Send notification message above the state topic
-      this.nofitySubscriptionInterval = setInterval(() => {
+      this.nofitySubscriptionInterval = setInterval(async () => {
+        const diskSize = await this.node.getDiskSize()
         const msg = {
-          msgType: 'notify-subscription',
+          msgType: 'notify-state',
           timeStamp: new Date().getTime(),
           peerId: this.node.peerId,
           multiAddress: this.node.addresses,
-          alias: this.node.opts.alias
+          alias: this.node.opts.alias,
+          onQueue: this.onQueue.length,
+          stats: this.diskStats,
+          diskSize
         }
         const msgStr = JSON.stringify(msg)
-        this.log('Sending notify-subscription')
+        this.log('Sending notify-state')
         this.node.helia.libp2p.services.pubsub.publish(this.stateTopic, new TextEncoder().encode(msgStr))
       }, this.notificationTimer)
     } catch (error) {
@@ -198,7 +208,7 @@ class PinRPC {
       this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
       const { msgType } = msgObj
 
-      if (msgType === 'notify-subscription') {
+      if (msgType === 'notify-state') {
         this.updateSubscriptionList(msgObj)
         return true
       }
@@ -248,7 +258,7 @@ class PinRPC {
         cid
 
       }
-      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
       this.deleteFromQueueArray(inObj.cid)
       return true
     } catch (error) {
@@ -275,18 +285,29 @@ class PinRPC {
 
   updateSubscriptionList (msg = {}) {
     try {
-      const { peerId, multiAddress, timeStamp, alias } = msg
+      const { peerId, multiAddress, timeStamp, alias, diskSize } = msg
       if (!peerId || typeof peerId !== 'string') throw new Error('peerId is required')
       if (!Array.isArray(multiAddress)) throw new Error('multiAddress must be an array of addresses')
 
-      const exist = this.subscriptionList.find((value) => { return peerId === value.peerId })
-      if (exist) return false
-      this.subscriptionList.push({
-        alias,
-        peerId,
-        multiAddress,
-        timeStamp: timeStamp || new Date().getTime()
-      })
+      const subsIndex = this.subscriptionList.findIndex((value) => { return peerId === value.peerId })
+      const subscriptor = this.subscriptionList[subsIndex]
+      if (subscriptor) {
+        this.subscriptionList[subsIndex] = {
+          alias,
+          peerId,
+          multiAddress,
+          timeStamp: timeStamp || new Date().getTime(),
+          diskSize
+        }
+      } else {
+        this.subscriptionList.push({
+          alias,
+          peerId,
+          multiAddress,
+          timeStamp: timeStamp || new Date().getTime(),
+          diskSize
+        })
+      }
 
       return true
     } catch (error) {
