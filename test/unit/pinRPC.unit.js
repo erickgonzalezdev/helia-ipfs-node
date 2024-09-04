@@ -521,11 +521,11 @@ describe('#pinRPC.js', () => {
   })
 
   describe('#parseStateMsgProtocol', () => {
-    it('should handle "notify-subscription" action', async () => {
+    it('should handle "notify-state" action', async () => {
       try {
         uut.node.peerId = 'node peer id'
         const msgData = {
-          msgType: 'notify-subscription',
+          msgType: 'notify-state',
           peerId: uut.node.peerId,
           multiAddress: [],
           timeStamp: new Date().getTime()
@@ -577,7 +577,7 @@ describe('#pinRPC.js', () => {
       try {
         uut.node.peerId = 'node peer id 2'
         const msgData = {
-          msgType: 'notify-subscription'
+          msgType: 'notify-state'
         }
         const message = {
           detail: {
@@ -671,7 +671,7 @@ describe('#pinRPC.js', () => {
   })
 
   describe('#updateSubscriptionList', () => {
-    it('should update subscruption list', async () => {
+    it('should update subscruption list if peer does not exist', async () => {
       try {
         uut.subscriptionList = []
         const msgData = {
@@ -687,18 +687,20 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
-    it('should return false if peerId already exist', async () => {
+    it('should update existing peer', async () => {
       try {
-        uut.subscriptionList = [{ peerId: 'myId' }]
+        uut.subscriptionList = [{ peerId: 'myId', diskSize: 4 }, { peerId: 'myId2', diskSize: 1 }]
         const msgData = {
-          peerId: 'myId',
+          peerId: 'myId2',
           multiAddress: [],
-          timeStamp: new Date().getTime()
+          timeStamp: new Date().getTime(),
+          diskSize: 3
         }
 
         const result = await uut.updateSubscriptionList(msgData)
-        assert.isFalse(result)
-        assert.equal(uut.subscriptionList.length, 1)
+        assert.isTrue(result)
+        assert.equal(uut.subscriptionList.length, 2)
+        assert.equal(uut.subscriptionList[1].diskSize, 3)
       } catch (err) {
         assert.fail('Unexpected code path')
       }

@@ -539,4 +539,25 @@ describe('#Helia.js', () => {
       }
     })
   })
+  describe('#getDiskSize', () => {
+    it('should  get node size', async () => {
+      try {
+        sandbox.stub(uut.getFolderSize, 'strict').resolves(1)
+        const result = await uut.getDiskSize()
+        assert.isString(result)
+      } catch (err) {
+        console.log('Err', err)
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should return false on error', async () => {
+      try {
+        sandbox.stub(uut.getFolderSize, 'strict').throws(new Error('test error'))
+        const result = await uut.getDiskSize()
+        assert.isFalse(result)
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+  })
 })
