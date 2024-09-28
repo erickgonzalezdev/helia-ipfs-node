@@ -129,9 +129,16 @@ class HeliaNode {
       const options = await this.parseOptions()
       this.log('Starting Helia IPFS Node')
 
+      const blockStorePath = `${options.storePath}/blockstore`
+      const dataStorePath = `${options.storePath}/datastore`
+
+      if (this.fs.existsSync(`${dataStorePath}/peers`)) {
+        await this.fs.promises.rm(`${dataStorePath}/peers`, { recursive: true, force: true })
+      }
+
       // Create block and data stores.
-      const blockstore = new this.FsBlockstore(`${options.storePath}/blockstore`)
-      const datastore = new this.FsDatastore(`${options.storePath}/datastore`)
+      const blockstore = new this.FsBlockstore(blockStorePath)
+      const datastore = new this.FsDatastore(dataStorePath)
 
       // Key chain to define node id
       const keychainInit = {
