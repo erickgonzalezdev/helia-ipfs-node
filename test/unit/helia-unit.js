@@ -81,6 +81,19 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
+    it('should start with new peer store', async () => {
+      try {
+        sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
+        sandbox.stub(uut, 'saveKey').resolves(true)
+        sandbox.stub(uut, 'readKey').throws(new Error())
+        sandbox.stub(uut.fs, 'existsSync').resolves(true)
+        sandbox.stub(uut.fs.promises, 'rm').resolves(true)
+
+        await uut.start({ nodeKey: '6259bf2c92c772162efdc63af1c2d1eb' })
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
     it('should handle error', async () => {
       try {
         sandbox.stub(uut, 'publicIp').throws(new Error('Test Error'))
