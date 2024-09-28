@@ -20,6 +20,7 @@ export default class Gateway {
       const contentArray = await this.lsDirectoryContent(cid)
       const isDir = contentArray[0].depth
 
+      // CID with file name format
       if (name) {
         for (let i = 0; i < contentArray.length; i++) {
           const cont = contentArray[i]
@@ -37,7 +38,7 @@ export default class Gateway {
         s.push(null)
         ctx.body = s
       }
-
+      // CID folder ,  display List of cid
       if (isDir) {
         for (let i = 0; i < contentArray.length; i++) {
           const cont = contentArray[i]
@@ -50,13 +51,30 @@ export default class Gateway {
         s.push(null)
         ctx.body = s
       } else {
+        // Common CID file
         const content = await this.node.getContent(cid)
-
         const fileType = await fileTypeFromBuffer(content)
         this.log('fileType', fileType)
         let contentType = 'text/plain; charset=utf-8'
         if (fileType && fileType.mime) {
           contentType = fileType.mime
+        }
+
+        // Stream video
+        if (contentType === 'video/mp4') {
+          const range = ctx.req.headers.range
+          if (range) {
+            const videoSize = content.length
+            const CHUNK_SIZE = 10 ** 6 // 1MB
+            const start = Number(range.replace(/\D/g, ''))
+            const end = Math.min(start + CHUNK_SIZE, videoSize - 1)
+            const contentLength = end - start + 1
+
+            ctx.set('Content-Range', `bytes ${start}-${end}/${videoSize}`)
+            ctx.set('Accept-Ranges', 'bytes')
+            ctx.set('Content-Length', contentLength)
+            ctx.set('Accept-Ranges', 'bytes')
+          }
         }
         ctx.type = contentType
         ctx.body = content
