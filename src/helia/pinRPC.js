@@ -54,6 +54,8 @@ class PinRPC {
     this.pinTopic = `${this.topic}-pin`
     this.stateTopic = `${this.topic}-state`
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
+    this.onSuccessRemoteUnpin = config.onSuccessRemoteUnpin || this.defaultRemoteUnpinCallback
+
     this.log = this.node.log || console.log
 
     this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 2 })
@@ -62,6 +64,7 @@ class PinRPC {
     // Bind all functions
     this.start = this.start.bind(this)
     this.requestRemotePin = this.requestRemotePin.bind(this)
+    this.requestRemoteUnpin = this.requestRemoteUnpin.bind(this)
     this.listen = this.listen.bind(this)
     this.parsePinMsgProtocol = this.parsePinMsgProtocol.bind(this)
     this.parseStateMsgProtocol = this.parseStateMsgProtocol.bind(this)
@@ -71,6 +74,9 @@ class PinRPC {
     this.deleteFromQueueArray = this.deleteFromQueueArray.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.getSubscriptionList = this.getSubscriptionList.bind(this)
+    this.handleUnpin = this.handleUnpin.bind(this)
+
+    // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
     this.notificationTimer = 60000
@@ -136,6 +142,27 @@ class PinRPC {
     }
   }
 
+  requestRemoteUnpin (inObj = {}) {
+    try {
+      const { cid, toPeerId, fromPeerId } = inObj
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
+      if (!toPeerId || typeof toPeerId !== 'string') throw new Error('toPeerId string is required!')
+      if (!fromPeerId || typeof fromPeerId !== 'string') throw new Error('fromPeerId string is required!')
+
+      inObj.msgType = 'remote-unpin'
+
+      const msg = JSON.stringify(inObj)
+      this.log(`Publishing ${msg} to  ${this.pinTopic}`)
+
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
+
+      return true
+    } catch (error) {
+      this.log('Error in pinRPC/requestRemoteUnpin()', error)
+      throw error
+    }
+  }
+
   listen () {
     try {
       this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
@@ -188,8 +215,18 @@ class PinRPC {
         return true
       }
 
+      if (msgType === 'remote-unpin') {
+        this.handleUnpin(msgObj)
+        return true
+      }
+
       if (msgType === 'success-pin') {
         this.onSuccessRemotePin({ cid, host: this.node.peerId.toString() })
+        return true
+      }
+
+      if (msgType === 'success-unpin') {
+        this.onSuccessRemoteUnpin({ cid, host: this.node.peerId.toString() })
         return true
       }
 
@@ -268,6 +305,35 @@ class PinRPC {
     }
   }
 
+  async handleUnpin (inObj = {}) {
+    try {
+      const { fromPeerId, cid } = inObj
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
+      if (!fromPeerId || typeof fromPeerId !== 'string') throw new Error('fromPeerId string is required!')
+
+      try {
+        this.log(`Trying to Unpin cid ${cid}`)
+        await this.node.unPinCid(CID.parse(cid))
+      } catch (error) {
+        // skip
+      }
+
+      this.log('Publish unpin success notification')
+      const responseMsg = {
+        msgType: 'success-unpin',
+        toPeerId: fromPeerId,
+        fromPeerId: this.node.peerId.toString(),
+        cid
+
+      }
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      return true
+    } catch (error) {
+      this.log('Error on PinRPC/handleUnpin()', error)
+      throw error
+    }
+  }
+
   deleteFromQueueArray (cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
@@ -322,6 +388,10 @@ class PinRPC {
 
   defaultRemotePinCallback (inObj = {}) {
     this.log(`Success remote pin cid  : ${inObj.cid} on ${inObj.host} `)
+  }
+
+  defaultRemoteUnpinCallback (inObj = {}) {
+    this.log(`Success remote unpin cid  : ${inObj.cid} on ${inObj.host} `)
   }
 }
 
