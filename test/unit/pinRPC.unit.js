@@ -173,6 +173,63 @@ describe('#pinRPC.js', () => {
     })
   })
 
+  describe('#requestRemoteUnpin', () => {
+    it('should request remote pin', async () => {
+      try {
+        const inObj = {
+          toPeerId: 'peerId',
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+
+        const result = uut.requestRemoteUnpin(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+
+    it('should throw error if cid is not provided', async () => {
+      try {
+        const inObj = {
+          toPeerId: 'peerId',
+          fromPeerId: 'peerId'
+        }
+        await uut.requestRemoteUnpin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'cid string is required')
+      }
+    })
+    it('should throw error if toPeerId is not provided', async () => {
+      try {
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+        await uut.requestRemoteUnpin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'toPeerId string is required')
+      }
+    })
+    it('should throw error if fromPeerId is not provided', async () => {
+      try {
+        const inObj = {
+          toPeerId: 'peerId',
+          cid: 'content id'
+        }
+        await uut.requestRemoteUnpin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'fromPeerId string is required')
+      }
+    })
+  })
+
   describe('#listen', () => {
     it('should subscribe to the event listener', async () => {
       try {
@@ -311,6 +368,62 @@ describe('#pinRPC.js', () => {
     })
   })
 
+  describe('#handleUnpin', () => {
+    it('should handle unpin', async () => {
+      try {
+        sandbox.stub(uut.node, 'unPinCid').resolves(true)
+
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const result = await uut.handleUnpin(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should  skip  error', async () => {
+      try {
+        sandbox.stub(uut.node, 'unPinCid').throws(new Error('not found'))
+
+        const inObj = {
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const result = await uut.handleUnpin(inObj)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should throw error if cid is not provided', async () => {
+      try {
+        const inObj = {
+          fromPeerId: 'peerId'
+        }
+        await uut.handleUnpin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'cid string is required')
+      }
+    })
+
+    it('should throw error if fromPeerId is not provided', async () => {
+      try {
+        const inObj = {
+          cid: 'content id'
+        }
+        await uut.handleUnpin(inObj)
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'fromPeerId string is required')
+      }
+    })
+  })
+
   describe('#parsePinMsgProtocol', () => {
     it('should handle pass validation if toPeerId string match with node peer id', async () => {
       try {
@@ -380,6 +493,48 @@ describe('#pinRPC.js', () => {
         uut.node.peerId = 'node peer id 2'
         const msgData = {
           msgType: 'success-pin',
+          toPeerId: uut.node.peerId,
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+        const message = {
+          detail: {
+            topic: uut.pinTopic,
+            data: new TextEncoder().encode(JSON.stringify(msgData))
+          }
+        }
+        const result = await uut.parsePinMsgProtocol(message)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should handle "remote-unpin" action', async () => {
+      try {
+        uut.node.peerId = 'node peer id'
+        const msgData = {
+          msgType: 'remote-unpin',
+          toPeerId: uut.node.peerId,
+          fromPeerId: 'peerId',
+          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        }
+        const message = {
+          detail: {
+            topic: uut.pinTopic,
+            data: new TextEncoder().encode(JSON.stringify(msgData))
+          }
+        }
+        const result = await uut.parsePinMsgProtocol(message)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should handle action "success-unpin" action', async () => {
+      try {
+        uut.node.peerId = 'node peer id 2'
+        const msgData = {
+          msgType: 'success-unpin',
           toPeerId: uut.node.peerId,
           fromPeerId: 'peerId',
           cid: 'content id'
