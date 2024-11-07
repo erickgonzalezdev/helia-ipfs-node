@@ -24,6 +24,7 @@ describe('#Helia.js', () => {
     uut.publicIp = async () => { return '192.168.1.1' }
     uut.createHelia = createHeliaMock
     uut.createLibp2p = createLibp2pMock
+    uut.sleep = async () => { }
     if (!process.env.log) {
       uut.log = () => { }
     }
@@ -570,6 +571,72 @@ describe('#Helia.js', () => {
         assert.isFalse(result)
       } catch (err) {
         assert.fail('Unexpected result')
+      }
+    })
+  })
+
+  describe('#getStat', () => {
+    it('should  throw error if input is not provided', async () => {
+      try {
+        await uut.getStat()
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'CID string is required.')
+      }
+    })
+    it('should get stat', async () => {
+      try {
+        const cid = 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        sandbox.stub(uut.ufs, 'stat').resolves({ fileSize: 1 })
+        const result = await uut.getStat(cid)
+        assert.exists(result)
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+  })
+
+  describe('#lazyDownload', () => {
+    it('should get content', async () => {
+      try {
+        uut.getContent = async () => { return Buffer.alloc(1024) }
+        // sandbox.stub(uut, 'getContent').resolves( Buffer.alloc(1024))
+        uut.ufs = unixfsMock
+        const cid = 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        const content = await uut.lazyDownload(cid)
+        assert.isString(content)
+        assert.equal(cid, content)
+      } catch (err) {
+        console.log('Err', err)
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should await if cid is already downloaded and does not exist in local node', async () => {
+      try {
+        const cid = 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+
+        uut.ufs = unixfsMock
+        uut.downloading[cid] = true
+        sandbox.stub(uut, 'getStat')
+          .onCall(0).resolves({ fileSize: 1000, localFileSize: 0 })
+          .onCall(1).resolves({ fileSize: 1000, localFileSize: 1000 })
+
+        const content = await uut.lazyDownload(cid)
+        assert.isString(content)
+        assert.equal(cid, content)
+      } catch (err) {
+        console.log('Err', err)
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should throw an error if input is not provided', async () => {
+      try {
+        await uut.lazyDownload()
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'CID string is required.')
       }
     })
   })
