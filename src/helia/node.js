@@ -29,13 +29,15 @@ import { uPnPNAT } from '@libp2p/upnp-nat'
 // import { mdns } from '@libp2p/mdns'
 import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
 import { create as createIpfsHttpClient } from 'kubo-rpc-client'
-// import { CID } from 'multiformats/cid'
+import { CID } from 'multiformats/cid'
 import crypto from 'crypto'
 import { identify } from '@libp2p/identify'
 import { publicIpv4 } from 'public-ip'
 
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import getFolderSize from 'get-folder-size'
+
+import { sleep } from '../util/util.js'
 
 // default is to use ipfs.io
 const client = createIpfsHttpClient({
@@ -92,7 +94,10 @@ class HeliaNode {
     this.saveKey = this.saveKey.bind(this)
     this.readKey = this.readKey.bind(this)
     this.getDiskSize = this.getDiskSize.bind(this)
-
+    this.getStat = this.getStat.bind(this)
+    this.lazyDownload = this.lazyDownload.bind(this)
+    this.downloading = {}
+    this.sleep = sleep
     this.log = inputOptions.log || console.log
   }
 
@@ -460,19 +465,74 @@ class HeliaNode {
     }
   } */
 
-  // Download content from CID
-  async getContent (CID) {
+  // Get content from CID
+  async getContent (CID, options = {}) {
     try {
       if (!CID || typeof CID !== 'string') {
         throw new Error('CID string is required.')
       }
 
       const chunks = []
-      for await (const chunk of this.ufs.cat(CID)) {
+      for await (const chunk of this.ufs.cat(CID, options)) {
         chunks.push(chunk)
       }
 
       return Buffer.concat(chunks)
+    } catch (error) {
+      this.log('Error helia getContent()  ', error)
+      throw error
+    }
+  }
+
+  async lazyDownload (cid, length = 10 ** 6 * 10) {
+    try {
+      if (!cid || typeof cid !== 'string') {
+        throw new Error('CID string is required.')
+      }
+
+      let ready = true
+      let fileSize
+      let localSize
+      // Ignore all incoming request to download a cid wich is already downloading . this keep lower ram usage.
+      // If the CID is fully downloaded on this node , go ahead to get the content.
+      do {
+        const stats = await this.getStat(cid)
+        fileSize = Number(stats.fileSize)
+        localSize = Number(stats.localFileSize)
+
+        if (this.downloading[cid] && localSize !== fileSize) {
+          ready = false
+          await this.sleep(2000)
+        } else {
+          ready = true
+        }
+      } while (!ready)
+
+      this.downloading[cid] = cid
+
+      // console.log(stats)
+      let chunkLength = 0
+      while (chunkLength < Number(fileSize)) {
+        const chunks = await this.getContent(cid, { offset: chunkLength, length })
+        chunkLength += chunks.length
+      }
+      this.downloading[cid] = null
+
+      return cid
+    } catch (error) {
+      this.log('Error helia lazyDownload()  ', error)
+      throw error
+    }
+  }
+
+  async getStat (cid, options = {}) {
+    try {
+      if (!cid || typeof cid !== 'string') {
+        throw new Error('CID string is required.')
+      }
+      const res = await this.ufs.stat(CID.parse(cid), options)
+
+      return res
     } catch (error) {
       this.log('Error helia getContent()  ', error)
       throw error
