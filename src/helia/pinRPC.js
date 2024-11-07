@@ -281,6 +281,7 @@ class PinRPC {
 
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
+        await this.node.lazyDownload(cid)
         await this.node.pinCid(CID.parse(cid))
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)

@@ -315,6 +315,7 @@ describe('#pinRPC.js', () => {
   describe('#handlePin', () => {
     it('should handle Pin', async () => {
       try {
+        sandbox.stub(uut.node, 'lazyDownload').resolves(true)
         sandbox.stub(uut.node, 'pinCid').resolves(true)
 
         const inObj = {
@@ -329,6 +330,7 @@ describe('#pinRPC.js', () => {
     })
     it('should  skip "already pin" error', async () => {
       try {
+        sandbox.stub(uut.node, 'lazyDownload').resolves(true)
         sandbox.stub(uut.node, 'pinCid').throws(new Error('already pinned'))
 
         const inObj = {
