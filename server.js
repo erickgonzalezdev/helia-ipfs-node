@@ -37,16 +37,14 @@ const start = async () => {
   const rpc = new PinRPC({ node, topic: pinServiceTopic })
   await rpc.start()
 
-
   // Renew Connection
   await reConnect(node)
-  setTimeout(async () => {
-   await reConnect(node)
-  }, 30000);
-
+  setInterval(async () => {
+    await reConnect(node)
+  }, 30000)
 }
 
-const reConnect =async (node)=>{
+const reConnect = async (node) => {
   try {
     console.log(`Trying  to connet to ${pinServiceAddress}`)
     await node.connect(pinServiceAddress)
