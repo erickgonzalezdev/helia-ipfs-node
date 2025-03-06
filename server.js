@@ -17,7 +17,7 @@ const wsPort = process.env.WS_PORT ? process.env.ALIAS : 6001
 const tcpPort = process.env.TCP_PORT ? process.env.TCP_PORT : 6002
 const gatewayPort = process.env.GATEWAY_PORT ? process.env.GATEWAY_PORT : 8050
 const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_TOPIC : 'pin-rpc-topic'
-const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : 'fake address'
+const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
 
 //  Basic example with custom data.
 const start = async () => {
@@ -26,7 +26,7 @@ const start = async () => {
   bsList.push(pinServiceAddress)
 
   // Start helia node.
-  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [] })
+  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [], networking: 'full' })
   await node.start()
 
   // Start Gateway.

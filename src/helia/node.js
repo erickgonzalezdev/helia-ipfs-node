@@ -98,6 +98,8 @@ class HeliaNode {
     this.lazyDownload = this.lazyDownload.bind(this)
     this.downloading = {}
     this.sleep = sleep
+    this.getMinimalNetworkOpts = this.getMinimalNetworkOpts.bind(this)
+    this.getFullNetworkOpts = this.getFullNetworkOpts.bind(this)
     this.log = inputOptions.log || console.log
   }
 
@@ -110,7 +112,8 @@ class HeliaNode {
       wsPort: this.opts.wsPort || 4002,
       announceAddresses: this.opts.announceAddresses || [],
       bootstrapList: this.opts.bootstrapList || bootstrapConfig,
-      alias: this.opts.alias
+      alias: this.opts.alias,
+      networking: this.opts.networking || 'minimal' // 'full'
     }
 
     let existingKey
@@ -127,6 +130,105 @@ class HeliaNode {
 
     this.opts = defaultOptions
     return defaultOptions
+  }
+
+  getMinimalNetworkOpts (peerId, datastore) {
+    return {
+      peerId,
+      datastore,
+      addresses: {
+        listen: [
+          '/ip4/0.0.0.0/tcp/0',
+          `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
+          '/webrtc'
+        ]
+      },
+      transports: [
+        tcp({ logger: logger('upgrade') })
+      ],
+      connectionEncryption: [
+        noise()
+      ],
+      streamMuxers: [
+        yamux()
+      ],
+      peerDiscovery: [
+        // mdns() ,
+        bootstrap(bootstrapConfig)
+
+      ],
+      services: {
+        identify: identify(),
+        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true })
+      },
+      logger: disable()
+    }
+  }
+
+  getFullNetworkOpts (peerId, datastore) {
+    return {
+      peerId,
+      datastore,
+      addresses: {
+        listen: [
+          '/ip4/0.0.0.0/tcp/0',
+          `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
+          `/ip4/0.0.0.0/tcp/${this.opts.wsPort}/ws`,
+          '/webrtc'
+        ]
+      },
+      announce: this.opts.announceAddresses,
+      transports: [
+        tcp({ logger: logger('upgrade') }),
+        circuitRelayTransport({
+          discoverRelays: 2
+        }),
+        webRTCDirect(),
+        webSockets()
+      ],
+      connectionEncryption: [
+        noise()
+      ],
+      streamMuxers: [
+        yamux()
+      ],
+      peerDiscovery: [
+        // mdns() ,
+        bootstrap(bootstrapConfig)
+
+      ],
+      peerRouting: [
+        delegatedContentRouting(client)
+      ],
+      services: {
+        identify: identify(),
+        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+
+        aminoDHT: kadDHT({
+          protocol: '/ipfs/kad/1.0.0',
+          peerInfoMapper: removePrivateAddressesMapper
+        }),
+        nat: uPnPNAT({
+          description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
+          ttl: 7200, // TTL for port mappings (min 20 minutes)
+          keepAlive: true // Refresh port mapping after TTL expires
+        }),
+        relay: circuitRelayServer({ // makes the node function as a relay server
+          hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
+          advertise: true,
+          reservations: {
+            maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
+            reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
+            applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
+            defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
+            defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
+            maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
+            maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
+          }
+        })
+      },
+      logger: disable()
+    }
   }
 
   async start () {
@@ -180,80 +282,16 @@ class HeliaNode {
       this.peerId = peerId
 
       this.log(`Peer ID : ${peerId}`)
-      const libp2p = await this.createLibp2p({
-        peerId,
-        datastore,
-        addresses: {
-          listen: [
-            '/ip4/0.0.0.0/tcp/0',
-            `/ip4/0.0.0.0/tcp/${options.tcpPort}`,
-            //`/ip4/0.0.0.0/tcp/${options.wsPort}/ws`,
-            '/webrtc'
-          ]
-        },
-        announce: options.announceAddresses,
-        transports: [
-          tcp({ logger: logger('upgrade') }),
- /*          circuitRelayTransport({
-            discoverRelays: 2
-          }),
-          webRTCDirect(),
-          webSockets() */
-          /*     webRTC() */
-        ],
-        connectionEncryption: [
-          noise()
-        ],
-        streamMuxers: [
-          yamux()
-        ],
-        peerDiscovery: [
-          // mdns() ,
-          bootstrap(bootstrapConfig)
 
-        ],
-        peerRouting: [
-          //delegatedContentRouting(client)
-        ],
-        services: {
-          identify: identify(),
-          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+      let libp2pInputs = this.getMinimalNetworkOpts(peerId, datastore)
+      if (this.opts.networking === 'full') {
+        libp2pInputs = this.getFullNetworkOpts(peerId, datastore)
+      }
 
-          /*        lanDHT: kadDHT({
-                   protocol: '/ipfs/lan/kad/1.0.0',
-                   clientMode: false
-                 }), */
-/*           aminoDHT: kadDHT({
-            protocol: '/ipfs/kad/1.0.0',
-            peerInfoMapper: removePrivateAddressesMapper
-          }),
-          nat: uPnPNAT({
-            description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
-            ttl: 7200, // TTL for port mappings (min 20 minutes)
-            keepAlive: true // Refresh port mapping after TTL expires
-          }), */
-          //  identify: identify(),
-          // autoNAT: autoNAT(),
-          /*           dht: kadDHT({
-                      clientMode: false,
-                    }), */
+      console.log(libp2pInputs)
 
-     /*      relay: circuitRelayServer({ // makes the node function as a relay server
-            hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
-            advertise: true,
-            reservations: {
-              maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
-              reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
-              applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
-              defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
-              defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
-              maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
-              maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
-            }
-          }) */
-        },
-        logger: disable()
-      })
+      this.log(`Instantiating with ${this.opts.networking} networking`)
+      const libp2p = await this.createLibp2p(libp2pInputs)
 
       // Create helia node
       this.helia = await this.createHelia({
