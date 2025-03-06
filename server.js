@@ -26,7 +26,7 @@ const start = async () => {
   bsList.push(pinServiceAddress)
 
   // Start helia node.
-  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: bsList })
+  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [] })
   await node.start()
 
   // Start Gateway.
@@ -37,11 +37,13 @@ const start = async () => {
   const rpc = new PinRPC({ node, topic: pinServiceTopic })
   await rpc.start()
 
-  // Renew Connection
-  await reConnect(node)
-  setInterval(async () => {
+  if (pinServiceAddress) {
+    // Renew Connection
     await reConnect(node)
-  }, 30000)
+    setInterval(async () => {
+      await reConnect(node)
+    }, 30000)
+  }
 }
 
 const reConnect = async (node) => {

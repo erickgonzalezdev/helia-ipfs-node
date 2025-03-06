@@ -187,18 +187,18 @@ class HeliaNode {
           listen: [
             '/ip4/0.0.0.0/tcp/0',
             `/ip4/0.0.0.0/tcp/${options.tcpPort}`,
-            `/ip4/0.0.0.0/tcp/${options.wsPort}/ws`,
+            //`/ip4/0.0.0.0/tcp/${options.wsPort}/ws`,
             '/webrtc'
           ]
         },
         announce: options.announceAddresses,
         transports: [
           tcp({ logger: logger('upgrade') }),
-          circuitRelayTransport({
+ /*          circuitRelayTransport({
             discoverRelays: 2
           }),
           webRTCDirect(),
-          webSockets()
+          webSockets() */
           /*     webRTC() */
         ],
         connectionEncryption: [
@@ -223,7 +223,7 @@ class HeliaNode {
                    protocol: '/ipfs/lan/kad/1.0.0',
                    clientMode: false
                  }), */
-          aminoDHT: kadDHT({
+/*           aminoDHT: kadDHT({
             protocol: '/ipfs/kad/1.0.0',
             peerInfoMapper: removePrivateAddressesMapper
           }),
@@ -231,14 +231,14 @@ class HeliaNode {
             description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
             ttl: 7200, // TTL for port mappings (min 20 minutes)
             keepAlive: true // Refresh port mapping after TTL expires
-          }),
+          }), */
           //  identify: identify(),
           // autoNAT: autoNAT(),
           /*           dht: kadDHT({
                       clientMode: false,
                     }), */
 
-          relay: circuitRelayServer({ // makes the node function as a relay server
+     /*      relay: circuitRelayServer({ // makes the node function as a relay server
             hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
             advertise: true,
             reservations: {
@@ -250,7 +250,7 @@ class HeliaNode {
               maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
               maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
             }
-          })
+          }) */
         },
         logger: disable()
       })
