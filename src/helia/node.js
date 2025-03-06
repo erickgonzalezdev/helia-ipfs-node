@@ -213,7 +213,7 @@ class HeliaNode {
 
         ],
         peerRouting: [
-          delegatedContentRouting(client)
+          //delegatedContentRouting(client)
         ],
         services: {
           identify: identify(),
