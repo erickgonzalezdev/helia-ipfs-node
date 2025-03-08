@@ -18,6 +18,7 @@ const tcpPort = process.env.TCP_PORT ? process.env.TCP_PORT : 6002
 const gatewayPort = process.env.GATEWAY_PORT ? process.env.GATEWAY_PORT : 8050
 const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_TOPIC : 'pin-rpc-topic'
 const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
+const netWorking = process.env.NETWORKING ? process.env.NETWORKING : 'minimal'
 
 //  Basic example with custom data.
 const start = async () => {
@@ -26,7 +27,7 @@ const start = async () => {
   bsList.push(pinServiceAddress)
 
   // Start helia node.
-  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [], networking: 'full' })
+  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [], networking: netWorking })
   await node.start()
 
   // Start Gateway.
