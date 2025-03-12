@@ -1,12 +1,12 @@
 import fs from 'fs'
 import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type'
-
 import Stream from 'stream'
 
 const CHUNK_SIZE = 10 ** 6 * 5// 1MB
 
 export default class Gateway {
   constructor (config = {}) {
+    this.config = config
     this.node = config.node
     this.fs = fs
     this.getContent = this.getContent.bind(this)
@@ -19,80 +19,86 @@ export default class Gateway {
     try {
       const { cid } = ctx.params
 
-      const stats = await this.node.getStat(cid)
-      // console.log('stats', stats)
-      // console.log('stats', stats)
+      let cidToFetch = cid
+      // Verify if the cid is a folder
+      const parsed = await this.parseFolderFormat(ctx)
+
+      // If a result was sent.
+      if (parsed && !parsed.cid) return
+
+      // If new cid exist
+      if (parsed.cid) cidToFetch = parsed.cid
+      console.log('cidToFetch', cidToFetch)
+
+      // Get file stats
+      const stats = await this.node.getStat(cidToFetch)
+
       const fileSize = Number(stats.fileSize)
-      this.log('stats.fileSize : ', fileSize)
+      this.log(`${cidToFetch} fileSize : ${fileSize}`)
       const localSize = Number(stats.localFileSize)
-      this.log('stats.localSize : ', localSize)
+      this.log(`${cidToFetch} localSize : ${localSize}`)
 
       // Try to download the content before send it.
       if (localSize < fileSize) {
-        console.log('Node Lazy Downloading')
-        await this.node.lazyDownload(cid)
+        this.log(`Node Lazy Downloading for ${cidToFetch}`)
+        await this.node.lazyDownload(cidToFetch)
       }
 
-      const parsed = await this.parseContent(ctx)
-      if (parsed) return
-
       // Try to stream content.
-      const streamed = await this.streamContent(ctx, cid)
+      const streamed = await this.streamContent(ctx, cidToFetch)
       console.log('streamed', streamed)
       if (streamed) return
 
       // Send all content
-      const totalFileChunks = await this.node.getContent(cid, { offset: 0, length: fileSize })
+      const totalFileChunks = await this.node.getContent(cidToFetch, { offset: 0, length: fileSize })
       const fileTypeRes = await fileTypeFromBuffer(totalFileChunks)
-      const fileType = fileTypeRes || { mime: 'application/octet-stream' }
+      const fileType = fileTypeRes || { mime: 'text/plain' }
 
       ctx.type = fileType.mime
       ctx.body = totalFileChunks
     } catch (error) {
+      console.log(error)
       this.handleError(ctx, error)
     }
   }
 
-  async parseContent (ctx) {
+  async parseFolderFormat (ctx) {
     try {
       const { cid, name } = ctx.params
+
       // console.log('body' , ctx.req)
       const s = new Stream.Readable({ read () { } })
       const contentArray = await this.lsDirectoryContent(cid)
       const isDir = contentArray[0].depth
 
-      // CID with file name format
+      if (!name && !isDir) {
+        return false
+      }
+
       if (name) {
         for (let i = 0; i < contentArray.length; i++) {
           const cont = contentArray[i]
-
           if (cont.name === name) {
-            await this.node.lazyDownload(cont.cid.toString())
-            const content = await this.node.getContent(cont.cid.toString())
-            const fileTypeRes = await fileTypeFromBuffer(content)
-            const fileType = fileTypeRes || { mime: 'application/octet-stream' }
-
-            ctx.type = fileType.mime
-            ctx.body = content
-            return true
+            return { cid: cont.cid.toString() }
           }
         }
-        // s.push(null)
-        // ctx.body = s
       }
-      // CID folder ,  display List of cid
       if (isDir) {
-        for (let i = 0; i < contentArray.length; i++) {
-          const cont = contentArray[i]
-          if (cont.path !== cid) {
-            // ctx.response.set('content-type', 'txt/html')
-            ctx.type = 'html'
-            s.push(`<a href='http://localhost:8085/ipfs/${cid}/${cont.name}' >/${cont.name} ( ${cont.cid} )</a><hr />`)
+        if (isDir) {
+          for (let i = 0; i < contentArray.length; i++) {
+            const cont = contentArray[i]
+            if (cont.path !== cid) {
+              // ctx.response.set('content-type', 'txt/html')
+              ctx.type = 'html'
+              s.push(`<a href='http://localhost:${this.config.port}/ipfs/${cid}/${cont.name}' >/${cont.name} ( ${cont.cid} )</a><hr />`)
+            }
           }
+          s.push(null)
+          ctx.body = s
+
+          this.log('Resolved cid directory format')
+          return true
         }
-        s.push(null)
-        ctx.body = s
-        return true
       }
 
       return false
@@ -102,13 +108,14 @@ export default class Gateway {
     }
   }
 
-  async streamContent (ctx) {
+  async streamContent (ctx, cid) {
     try {
-      const { cid } = ctx.params
       if (!cid) throw new Error('cid must be provided!')
 
       const chunksForFileType = await this.node.getContent(cid, { offset: 0, length: CHUNK_SIZE })
       const fileType = await fileTypeFromBuffer(chunksForFileType)
+      console.log('fileType', fileType)
+      if (!fileType) return false
       const mime = fileType.mime
 
       if (!mime.includes('video') && !mime.includes('audio')) {
