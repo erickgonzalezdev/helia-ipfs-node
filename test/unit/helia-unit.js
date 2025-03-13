@@ -20,7 +20,7 @@ describe('#Helia.js', () => {
     // Restore the sandbox before each test.
     sandbox = sinon.createSandbox()
 
-    uut = new HealiaNode()
+    uut = new HealiaNode({ networking: 'full' })
     uut.publicIp = async () => { return '192.168.1.1' }
     uut.createHelia = createHeliaMock
     uut.createLibp2p = createLibp2pMock
@@ -34,6 +34,16 @@ describe('#Helia.js', () => {
 
   describe('#start', () => {
     it('should start helia node ', async () => {
+      try {
+        sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
+        sandbox.stub(uut, 'saveKey').resolves(true)
+
+        await uut.start()
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should start helia node full nwtworking', async () => {
       try {
         sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
         sandbox.stub(uut, 'saveKey').resolves(true)

@@ -33,6 +33,7 @@ class HeliaMock {
 
   getMultiaddrs () { return [] }
   async dial () { return true }
+  async gc () { return true }
 }
 
 const createHeliaMock = (opts) => {

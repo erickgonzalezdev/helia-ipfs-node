@@ -16,12 +16,9 @@ describe('#pinRPC.js', () => {
   let sandbox
   // let mockData
   let uut
-  let clock // fake timer
   let testLog = () => { }
 
   before(async () => {
-    clock = sinon.useFakeTimers()
-
     // Restore the sandbox before each test.
     if (process.env.log) {
       testLog = console.log
@@ -40,7 +37,6 @@ describe('#pinRPC.js', () => {
 
   afterEach(() => {
     sandbox.restore()
-    clock.restore()
   })
 
   describe('#contructor', () => {
