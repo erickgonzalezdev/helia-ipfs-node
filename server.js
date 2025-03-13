@@ -9,7 +9,7 @@
  *
  */
 
-import { HeliaNode, Server, PinRPC } from './src/lib.js'
+import { HeliaNode, Server, PinRPC, GB } from './src/lib.js'
 import { bootstrapConfig } from './src/util/bootstrap.js'
 
 const alias = process.env.ALIAS ? process.env.ALIAS : 'my node'
@@ -19,6 +19,7 @@ const gatewayPort = process.env.GATEWAY_PORT ? process.env.GATEWAY_PORT : 8050
 const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_TOPIC : 'pin-rpc-topic'
 const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
 const netWorking = process.env.NETWORKING ? process.env.NETWORKING : 'minimal'
+const gbPeriod = process.env.GB_PERIOD ? process.env.GB_PERIOD : null
 
 //  Basic example with custom data.
 const start = async () => {
@@ -37,6 +38,10 @@ const start = async () => {
   // Start Pin RPC
   const rpc = new PinRPC({ node, topic: pinServiceTopic })
   await rpc.start()
+
+  // Start Garbage Collector
+  const gb = new GB({ node, period: gbPeriod })
+  await gb.start()
 
   if (pinServiceAddress) {
     // Renew Connection

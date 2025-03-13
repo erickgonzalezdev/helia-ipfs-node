@@ -288,8 +288,6 @@ class HeliaNode {
         libp2pInputs = this.getFullNetworkOpts(peerId, datastore)
       }
 
-      console.log(libp2pInputs)
-
       this.log(`Instantiating with ${this.opts.networking} networking`)
       const libp2p = await this.createLibp2p(libp2pInputs)
 
