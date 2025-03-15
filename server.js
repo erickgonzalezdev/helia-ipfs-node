@@ -28,7 +28,7 @@ const start = async () => {
   bsList.push(pinServiceAddress)
 
   // Start helia node.
-  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: [], networking: netWorking })
+  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: bsList, networking: netWorking })
   await node.start()
 
   // Start Gateway.
