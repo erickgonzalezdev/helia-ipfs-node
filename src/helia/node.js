@@ -26,7 +26,7 @@ import { webSockets } from '@libp2p/websockets'
 // import { autoNAT } from '@libp2p/autonat'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
 import { uPnPNAT } from '@libp2p/upnp-nat'
-// import { mdns } from '@libp2p/mdns'
+import { mdns } from '@libp2p/mdns'
 import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
 import { create as createIpfsHttpClient } from 'kubo-rpc-client'
 import { CID } from 'multiformats/cid'
@@ -153,7 +153,7 @@ class HeliaNode {
         yamux()
       ],
       peerDiscovery: [
-        // mdns() ,
+        mdns() ,
         bootstrap(bootstrapConfig)
 
       ],
