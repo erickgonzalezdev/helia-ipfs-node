@@ -312,6 +312,7 @@ describe('#pinRPC.js', () => {
     it('should handle Pin', async () => {
       try {
         sandbox.stub(uut.node, 'lazyDownload').resolves(true)
+        sandbox.stub(uut.node, 'provideCID').resolves(true)
         sandbox.stub(uut.node, 'pinCid').resolves(true)
 
         const inObj = {

@@ -8,7 +8,6 @@ import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'
 
 import { multiaddr } from '@multiformats/multiaddr'
-import { keychain } from '@libp2p/keychain'
 import { unixfs } from '@helia/unixfs'
 
 import { logger, disable } from '@libp2p/logger'
@@ -26,7 +25,9 @@ import { webSockets } from '@libp2p/websockets'
 // import { autoNAT } from '@libp2p/autonat'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
 import { uPnPNAT } from '@libp2p/upnp-nat'
-import { mdns } from '@libp2p/mdns'
+import { autoNAT } from '@libp2p/autonat'
+
+// import { mdns } from '@libp2p/mdns'
 import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
 import { create as createIpfsHttpClient } from 'kubo-rpc-client'
 import { CID } from 'multiformats/cid'
@@ -38,6 +39,9 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import getFolderSize from 'get-folder-size'
 
 import { sleep } from '../util/util.js'
+import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
+
+import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
 // default is to use ipfs.io
 const client = createIpfsHttpClient({
@@ -58,7 +62,6 @@ class HeliaNode {
     this.FsDatastore = FsDatastore
     this.fs = fs
     this.multiaddr = multiaddr
-    this.keychain = keychain
     this.unixfs = unixfs
     this.logger = logger
     this.disable = disable
@@ -70,12 +73,12 @@ class HeliaNode {
 
     this.helia = null
     this.ufs = null
-    this.chain = null
     this.ip4 = null
     this.addresses = [] // node multi address
 
     this.start = this.start.bind(this)
     this.connect = this.connect.bind(this)
+    this.connectMultiaddr = this.connectMultiaddr.bind(this)
     this.upload = this.upload.bind(this)
     this.uploadDir = this.uploadDir.bind(this)
 
@@ -96,6 +99,7 @@ class HeliaNode {
     this.getDiskSize = this.getDiskSize.bind(this)
     this.getStat = this.getStat.bind(this)
     this.lazyDownload = this.lazyDownload.bind(this)
+    this.provideCID = this.provideCID.bind(this)
     this.downloading = {}
     this.sleep = sleep
     this.getMinimalNetworkOpts = this.getMinimalNetworkOpts.bind(this)
@@ -132,9 +136,9 @@ class HeliaNode {
     return defaultOptions
   }
 
-  getMinimalNetworkOpts (peerId, datastore) {
+  getMinimalNetworkOpts (privateKey, datastore) {
     return {
-      peerId,
+      privateKey,
       datastore,
       addresses: {
         listen: [
@@ -146,28 +150,33 @@ class HeliaNode {
       transports: [
         tcp({ logger: logger('upgrade') })
       ],
-      connectionEncryption: [
+      connectionEncrypters: [
         noise()
       ],
       streamMuxers: [
         yamux()
       ],
       peerDiscovery: [
-        mdns() ,
+        // mdns(),
         bootstrap(bootstrapConfig)
 
       ],
       services: {
         identify: identify(),
-        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true })
+        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+        dht: kadDHT({
+          protocol: '/ipfs/kad/1.0.0',
+          peerInfoMapper: removePrivateAddressesMapper,
+          clientMode: true
+        })
       },
       logger: disable()
     }
   }
 
-  getFullNetworkOpts (peerId, datastore) {
+  getFullNetworkOpts (privateKey, datastore) {
     return {
-      peerId,
+      privateKey,
       datastore,
       addresses: {
         listen: [
@@ -186,7 +195,7 @@ class HeliaNode {
         webRTCDirect(),
         webSockets()
       ],
-      connectionEncryption: [
+      connectionEncrypters: [
         noise()
       ],
       streamMuxers: [
@@ -204,10 +213,13 @@ class HeliaNode {
         identify: identify(),
         pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
 
-        aminoDHT: kadDHT({
+        dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
-          peerInfoMapper: removePrivateAddressesMapper
+          peerInfoMapper: removePrivateAddressesMapper,
+          clientMode: true
+
         }),
+        autoNAT: autoNAT(),
         nat: uPnPNAT({
           description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
           ttl: 7200, // TTL for port mappings (min 20 minutes)
@@ -247,56 +259,30 @@ class HeliaNode {
       const blockstore = new this.FsBlockstore(blockStorePath)
       const datastore = new this.FsDatastore(dataStorePath)
 
-      // Key chain to define node id
-      const keychainInit = {
-        dek: {
-          keyLength: 64,
-          iterationCount: 10000,
-          salt: options.nodeKey,
-          hash: 'sha2-512'
-        }
-      }
+      const keyPair = await Libp2pCryptoKeys.generateKeyPairFromSeed('Ed25519', Buffer.from(options.nodeKey))
 
-      this.chain = this.keychain(keychainInit)({
-        datastore,
-        logger: { forComponent: logger('libp2p:keychain') }
-      })
-      // Define peerId
-      let peerId
-      let existingKey
-      // Verify existing key name
-      try {
-        existingKey = await this.chain.findKeyByName(options.nodeKey)
-      } catch (error) {
-        this.log('Key not found ')
-      }
-      // Create new key if it does not exist ,or use existing key name to define peerId
-      if (!existingKey) {
-        await this.chain.createKey(options.nodeKey, 'Ed25519', 4096)
-        peerId = await this.chain.exportPeerId(options.nodeKey)
-      } else {
-        this.log('Loading existing node', existingKey)
-        peerId = await this.chain.exportPeerId(existingKey.name)
-      }
+      const peerId = peerIdFromPrivateKey(keyPair)
+      this.log(`Peer Id : ${peerId}`)
 
-      this.peerId = peerId
+      this.ip4 = await this.publicIp()
 
-      this.log(`Peer ID : ${peerId}`)
-
-      let libp2pInputs = this.getMinimalNetworkOpts(peerId, datastore)
+      let libp2pInputs = this.getMinimalNetworkOpts(keyPair, datastore)
       if (this.opts.networking === 'full') {
-        libp2pInputs = this.getFullNetworkOpts(peerId, datastore)
+        libp2pInputs = this.getFullNetworkOpts(keyPair, datastore)
       }
 
       this.log(`Instantiating with ${this.opts.networking} networking`)
+      this.log('Bootstrap List', options.bootstrapList)
       const libp2p = await this.createLibp2p(libp2pInputs)
 
+      this.peerId = peerId
       // Create helia node
       this.helia = await this.createHelia({
         blockstore,
         datastore,
         libp2p
       })
+
       /*       // Attempt to guess our ip4 IP address.
             const ip4 = await this.publicIp()
             this.ip4 = ip4
@@ -326,6 +312,19 @@ class HeliaNode {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
       await this.helia.libp2p.dial(multiaddr(addr))
+      return true
+    } catch (err) {
+      this.log('Error helia connect()  ', err)
+      throw err
+    }
+  }
+
+  // Dial to multiAddress
+  async connectMultiaddr (multiaddr) {
+    try {
+      if (!multiaddr) { throw new Error('multiaddr is required!') }
+      // Connect to the P2WDB Pinning service used by pearson-api.
+      await this.helia.libp2p.dial(multiaddr)
       return true
     } catch (err) {
       this.log('Error helia connect()  ', err)
@@ -607,9 +606,10 @@ class HeliaNode {
       try {
         this.log('Content downloaded!')
         this.log('Pining content.!')
-        for await (const CID of this.helia.pins.add(cid)) {
-          resolves(CID)
+        for await (const pinnedCid of this.helia.pins.add(CID.parse(cid))) {
+          resolves(pinnedCid)
         }
+        this.log('Pinned content.!')
       } catch (error) {
         this.log('Error in pinCid()', error)
         reject(error)
@@ -624,8 +624,8 @@ class HeliaNode {
     }
     return new this.Promise(async (resolves, reject) => {
       try {
-        for await (const CID of this.helia.pins.rm(cid)) {
-          resolves(CID)
+        for await (const unpinnedCid of this.helia.pins.rm(CID.parse(cid))) {
+          resolves(unpinnedCid)
         }
       } catch (error) {
         this.log('Error in unPinCid()', error)
@@ -705,6 +705,20 @@ class HeliaNode {
     } catch (err) {
       this.log('Error in getDiskSize()', err)
       return false
+    }
+  }
+
+  async provideCID (cid) {
+    try {
+      if (!cid || typeof cid !== 'string') {
+        throw new Error('CID string is required.')
+      }
+      await this.helia.routing.provide(CID.parse(cid))
+      this.log(`Provided cid ${cid}`)
+      return true
+    } catch (err) {
+      this.log('Error in provideCID()', err)
+      throw err
     }
   }
 }

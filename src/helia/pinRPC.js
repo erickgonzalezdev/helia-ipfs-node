@@ -34,7 +34,7 @@
  *
  *
  */
-import { CID } from 'multiformats/cid'
+// import { CID } from 'multiformats/cid'
 import PQueue from 'p-queue'
 import { sleep } from '../util/util.js'
 
@@ -281,8 +281,9 @@ class PinRPC {
 
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
-        await this.node.lazyDownload(cid)
-        await this.node.pinCid(CID.parse(cid))
+        await this.node.lazyDownload(cid) // Download CID
+        await this.node.provideCID(cid) // provide CID
+        await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
         if (!error.message.toLowerCase().match('already')) throw error
@@ -314,7 +315,7 @@ class PinRPC {
 
       try {
         this.log(`Trying to Unpin cid ${cid}`)
-        await this.node.unPinCid(CID.parse(cid))
+        await this.node.unPinCid(cid)
       } catch (error) {
         // skip
       }
