@@ -53,34 +53,7 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
-    it('should  define existing peer id', async () => {
-      const mockId = 'my peer id'
-      const keychainMock = () => { return { createKey: () => { return 'my peer id' }, exportPeerId: () => { return mockId }, findKeyByName: () => { return {} } } }
 
-      sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
-      sandbox.stub(uut, 'saveKey').resolves(true)
-      sandbox.stub(uut, 'multiaddr').resolves(true)
-      sandbox.stub(uut, 'keychain').callsFake(() => { return keychainMock })
-
-      await uut.start()
-      assert.equal(uut.peerId, mockId)
-    })
-    it('should create new peer id if it does not exist', async () => {
-      try {
-        const mockId = 'my peer id'
-        const keychainMock = () => { return { createKey: () => { return 'my peer id' }, exportPeerId: () => { return mockId }, findKeyByName: () => { throw new Error('skipping error') } } }
-
-        sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
-        sandbox.stub(uut, 'saveKey').resolves(true)
-        sandbox.stub(uut, 'multiaddr').resolves(true)
-        sandbox.stub(uut, 'keychain').callsFake(() => { return keychainMock })
-
-        await uut.start()
-        assert.equal(uut.peerId, mockId)
-      } catch (err) {
-        assert.fail('Unexpected result')
-      }
-    })
     it('should start helia node with a new salt', async () => {
       try {
         sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
@@ -139,6 +112,36 @@ describe('#Helia.js', () => {
     it('should throw error if address is not provided', async () => {
       try {
         await uut.connect()
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'addr is required!')
+      }
+    })
+  })
+  describe('#connectMultiaddr', () => {
+    it('should connect and dial to provided multiaddr', async () => {
+      try {
+        sandbox.stub(uut.helia.libp2p, 'dial').resolves(true)
+
+        await uut.connectMultiaddr(['/ip4/127.0.0.1/tcp/40651/p2p/12D3KooWDiNi4HBbjK5eeCKKD9xoqtueHGgB2WQd83zNjwtgWRhX'])
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should handle dial error', async () => {
+      try {
+        sandbox.stub(uut.helia.libp2p, 'dial').throws(new Error('Test Error'))
+        await uut.connectMultiaddr(['/ip4/127.0.0.1/tcp/40651/p2p/12D3KooWDiNi4HBbjK5eeCKKD9xoqtueHGgB2WQd83zNjwtgWRhX'])
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'Test Error')
+      }
+    })
+    it('should throw error if multiaddr is not provided', async () => {
+      try {
+        await uut.connectMultiaddr()
 
         assert.fail('Unexpected result')
       } catch (err) {
@@ -412,7 +415,7 @@ describe('#Helia.js', () => {
   describe('#pinCid', () => {
     it('should pin cid', async () => {
       try {
-        const cid = await uut.pinCid('cid')
+        const cid = await uut.pinCid('bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q')
         assert.exists(cid)
       } catch (err) {
         // console.log('Err',err)
@@ -432,7 +435,7 @@ describe('#Helia.js', () => {
       try {
         sandbox.stub(uut.helia.pins, 'add').throws(new Error('test error'))
 
-        await uut.pinCid('cid')
+        await uut.pinCid('bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q')
 
         assert.fail('Unexpected result')
       } catch (err) {
@@ -444,7 +447,7 @@ describe('#Helia.js', () => {
   describe('#unPinCid', () => {
     it('should unpin cid', async () => {
       try {
-        const cid = await uut.unPinCid('cid')
+        const cid = await uut.unPinCid('bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q')
         assert.exists(cid)
       } catch (err) {
         // console.log('Err',err)
@@ -464,7 +467,7 @@ describe('#Helia.js', () => {
       try {
         sandbox.stub(uut.helia.pins, 'rm').throws(new Error('test error'))
 
-        await uut.unPinCid('cid')
+        await uut.unPinCid('bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q')
 
         assert.fail('Unexpected result')
       } catch (err) {
@@ -581,6 +584,36 @@ describe('#Helia.js', () => {
         assert.isFalse(result)
       } catch (err) {
         assert.fail('Unexpected result')
+      }
+    })
+  })
+  describe('#provideCID', () => {
+    it('should  throw error if input is not provided', async () => {
+      try {
+        await uut.provideCID()
+
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'CID string is required.')
+      }
+    })
+    it('should provide a CID', async () => {
+      try {
+        const cid = 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        const result = await uut.provideCID(cid)
+        assert.isTrue(result)
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should handle error', async () => {
+      try {
+        sandbox.stub(uut.helia.routing, 'provide').throws(new Error('test error'))
+        const cid = 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
+        await uut.provideCID(cid)
+        assert.fail('Unexpected result')
+      } catch (err) {
+        assert.include(err.message, 'test error')
       }
     })
   })

@@ -10,3 +10,4 @@ massive-pin-example.js
 data-path/*
 start-dev.sh
 start-prod.sh
+server2.js

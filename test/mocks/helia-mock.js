@@ -21,6 +21,12 @@ class BlockStoreMock {
   async put () { return true }
   async get () { return true }
 }
+class RoutingMock {
+  constructor (config) { this.config = config }
+
+  async provide () { return true }
+  async findProviders () { return [] }
+}
 
 class HeliaMock {
   constructor (opts) {
@@ -29,6 +35,7 @@ class HeliaMock {
     this.libp2p = opts.libp2p
     this.pins = new PinsMock()
     this.blockstore = new BlockStoreMock()
+    this.routing = new RoutingMock()
   }
 
   getMultiaddrs () { return [] }
