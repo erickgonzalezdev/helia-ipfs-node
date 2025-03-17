@@ -55,11 +55,16 @@ class PinRPC {
     this.stateTopic = `${this.topic}-state`
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
     this.onSuccessRemoteUnpin = config.onSuccessRemoteUnpin || this.defaultRemoteUnpinCallback
+    this.onSuccessRemoteProvide = config.onSuccessRemoteProvide || this.defaultRemoteProvideCallback
 
     this.log = this.node.log || console.log
 
-    this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 2 })
+    this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 4 })
     this.onQueue = []
+
+    this.provideQueue = new PQueue({ concurrency: 1, timeout: 1000 })
+    this.onProvideQueue = []
+    this.alreadyProvidedArr = []
     this.sleep = sleep
     // Bind all functions
     this.start = this.start.bind(this)
@@ -163,6 +168,27 @@ class PinRPC {
     }
   }
 
+  requestRemoteProvide (inObj = {}) {
+    try {
+      const { cid, toPeerId, fromPeerId } = inObj
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
+      if (!toPeerId || typeof toPeerId !== 'string') throw new Error('toPeerId string is required!')
+      if (!fromPeerId || typeof fromPeerId !== 'string') throw new Error('fromPeerId string is required!')
+
+      inObj.msgType = 'remote-provide'
+
+      const msg = JSON.stringify(inObj)
+      this.log(`Publishing ${msg} to  ${this.pinTopic}`)
+
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
+
+      return true
+    } catch (error) {
+      this.log('Error in pinRPC/requestRemotePin()', error)
+      throw error
+    }
+  }
+
   listen () {
     try {
       this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
@@ -209,24 +235,35 @@ class PinRPC {
         const toMe = toPeerId.find((val) => { return val === this.node.peerId.toString() })
         if (!toMe) return 'destination peerId does not match'
       }
-
+      // Receive request to pin a cid
       if (msgType === 'remote-pin') {
         this.addToQueue(msgObj)
         return true
       }
-
+      // Receive request to unpin a cid
       if (msgType === 'remote-unpin') {
         this.handleUnpin(msgObj)
         return true
       }
-
+      // Receive notification for pinned cid
       if (msgType === 'success-pin') {
         this.onSuccessRemotePin({ cid, host: this.node.peerId.toString() })
         return true
       }
-
+      // Receive notification for unpinned cid
       if (msgType === 'success-unpin') {
         this.onSuccessRemoteUnpin({ cid, host: this.node.peerId.toString() })
+        return true
+      }
+
+      // Receive request to provide a cid
+      if (msgType === 'remote-provide') {
+        this.addToProvideQueue(msgObj)
+        return true
+      }
+      // Receive notification for succes provided cid
+      if (msgType === 'success-provide') {
+        this.onSuccessRemoteProvide({ cid, host: this.node.peerId.toString() })
         return true
       }
 
@@ -273,6 +310,23 @@ class PinRPC {
     }
   }
 
+  addToProvideQueue (inObj = {}) {
+    try {
+      const alreadyInQueue = this.onProvideQueue.find((val) => { return val === inObj.cid })
+      if (alreadyInQueue) {
+        this.log(`cid already on provide queue : ${inObj.cid}`)
+        return true
+      }
+      this.onProvideQueue.push(inObj.cid)
+      this.log(`Adding pin to provide queue for cid ${inObj.cid}`)
+      this.provideQueue.add(async () => { await this.handleProvide(inObj) })
+      return true
+    } catch (error) {
+      this.log('Error on PinRPC/addToProvideQueue', error)
+      throw error
+    }
+  }
+
   async handlePin (inObj = {}) {
     try {
       const { fromPeerId, cid } = inObj
@@ -282,7 +336,6 @@ class PinRPC {
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
         await this.node.lazyDownload(cid) // Download CID
-        await this.node.provideCID(cid) // provide CID
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
@@ -336,12 +389,59 @@ class PinRPC {
     }
   }
 
+  async handleProvide (inObj = {}) {
+    try {
+      const { fromPeerId, cid } = inObj
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
+      if (!fromPeerId || typeof fromPeerId !== 'string') throw new Error('fromPeerId string is required!')
+
+      const alreadyProvided = this.alreadyProvidedArr.find((val) => { return val === inObj.cid })
+      if (!alreadyProvided) {
+        this.log(`Trying to provide cid ${cid} on queue`)
+        await this.node.provideCID(cid) // provide CID
+        this.alreadyProvidedArr.push(cid)
+      }
+
+      this.log('Publish provide success notification')
+      const responseMsg = {
+        msgType: 'success-provide',
+        toPeerId: fromPeerId,
+        fromPeerId: this.node.peerId.toString(),
+        cid
+
+      }
+      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.deleteFromProvideQueueArray(inObj.cid)
+      return true
+    } catch (error) {
+      this.deleteFromProvideQueueArray(inObj.cid)
+      this.log(`Error Trying to provide cid ${inObj.cid}`)
+      this.log('Error on PinRPC/handleProvide()', error)
+      throw error
+    }
+  }
+
   deleteFromQueueArray (cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
       const cidIndex = this.onQueue.findIndex((val) => { return val === cid })
       if (cidIndex >= 0) {
         this.onQueue.splice(cidIndex, 1)
+        return true
+      }
+      return false
+    } catch (error) {
+      this.log('Error on PinRPC/deleteFromQueueArray()', error)
+      throw error
+    }
+  }
+
+  deleteFromProvideQueueArray (cid) {
+    try {
+      if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
+      const cidIndex = this.onProvideQueue.findIndex((val) => { return val === cid })
+      if (cidIndex >= 0) {
+        this.onProvideQueue.splice(cidIndex, 1)
         return true
       }
       return false
@@ -394,6 +494,10 @@ class PinRPC {
 
   defaultRemoteUnpinCallback (inObj = {}) {
     this.log(`Success remote unpin cid  : ${inObj.cid} on ${inObj.host} `)
+  }
+
+  defaultRemoteProvideCallback (inObj = {}) {
+    this.log(`Success remote provide cid  : ${inObj.cid} on ${inObj.host} `)
   }
 }
 

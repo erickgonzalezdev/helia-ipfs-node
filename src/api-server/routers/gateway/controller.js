@@ -2,7 +2,7 @@ import fs from 'fs'
 import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type'
 import Stream from 'stream'
 
-const CHUNK_SIZE = 10 ** 6 * 5// 1MB
+const CHUNK_SIZE = 10 ** 6 * 10// 10MB
 
 export default class Gateway {
   constructor (config = {}) {
