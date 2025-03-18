@@ -59,12 +59,12 @@ class PinRPC {
 
     this.log = this.node.log || console.log
 
-    this.onPinQueueTimeout = config.onPinQueueTimeout || 60000 * 5 // 5 minutes default
+    this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
     this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
     this.onQueue = []
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
-    this.onProvideQueueTimeout = config.onProvideQueueTimeout || 60000 * 5 // 5 minutes default
+    this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
     this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = []
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
