@@ -20,6 +20,8 @@ const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_
 const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
 const netWorking = process.env.NETWORKING ? process.env.NETWORKING : 'minimal'
 const gbPeriod = process.env.GB_PERIOD ? process.env.GB_PERIOD : null
+const onPinQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
+const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 
 //  Basic example with custom data.
 const start = async () => {
@@ -36,7 +38,7 @@ const start = async () => {
   await gateway.start()
 
   // Start Pin RPC
-  const rpc = new PinRPC({ node, topic: pinServiceTopic })
+  const rpc = new PinRPC({ node, topic: pinServiceTopic, onPinQueueTimeout, onProvideQueueTimeout })
   await rpc.start()
 
   // Start Garbage Collector

@@ -519,11 +519,13 @@ class HeliaNode {
     }
   }
 
-  async lazyDownload (cid, length = 10 ** 6 * 10) {
+  async lazyDownload (cid, length, signal) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
       }
+
+      if (!length) length = 10 ** 6 * 50 // max 50mb chunks
 
       let ready = true
       let fileSize
@@ -531,7 +533,7 @@ class HeliaNode {
       // Ignore all incoming request to download a cid wich is already downloading . this keep lower ram usage.
       // If the CID is fully downloaded on this node , go ahead to get the content.
       do {
-        const stats = await this.getStat(cid)
+        const stats = await this.getStat(cid, { signal })
         fileSize = Number(stats.fileSize)
         localSize = Number(stats.localFileSize)
 
@@ -548,13 +550,15 @@ class HeliaNode {
       // console.log(stats)
       let chunkLength = 0
       while (chunkLength < Number(fileSize)) {
-        const chunks = await this.getContent(cid, { offset: chunkLength, length })
+        const chunks = await this.getContent(cid, { offset: chunkLength, length, signal })
         chunkLength += chunks.length
       }
+
       this.downloading[cid] = null
 
       return cid
     } catch (error) {
+      this.downloading[cid] = null
       this.log('Error helia lazyDownload()  ', error)
       throw error
     }
@@ -708,12 +712,12 @@ class HeliaNode {
     }
   }
 
-  async provideCID (cid) {
+  async provideCID (cid, options) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
       }
-      await this.helia.routing.provide(CID.parse(cid))
+      await this.helia.routing.provide(CID.parse(cid), options)
       this.log(`Provided cid ${cid}`)
       return true
     } catch (err) {

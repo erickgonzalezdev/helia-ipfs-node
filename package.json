@@ -1,6 +1,6 @@
 {
   "name": "helia-ipfs-node",
-  "version": "1.0.14",
+  "version": "2.1.2",
   "description": "",
   "main": "index.js",
   "type": "module",

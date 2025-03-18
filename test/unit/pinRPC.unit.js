@@ -33,6 +33,7 @@ describe('#pinRPC.js', () => {
 
     uut = new PinRPC({ node, topic: 'test topic' })
     uut.pinQueue = new PQueueMock()
+    uut.provideQueue = new PQueueMock()
   })
 
   afterEach(() => {
@@ -398,12 +399,8 @@ describe('#pinRPC.js', () => {
       }
     })
     it('should handle Error', async () => {
-      try {
-        uut.deleteFromQueueArray()
-        assert.fail('Unexpected code path')
-      } catch (err) {
-        assert.include(err.message, 'cid string is required')
-      }
+      const res = uut.deleteFromQueueArray()
+      assert.isFalse(res)
     })
   })
   describe('#deleteFromProvideQueueArray', () => {
@@ -418,31 +415,22 @@ describe('#pinRPC.js', () => {
       }
     })
     it('should handle Error', async () => {
-      try {
-        uut.deleteFromProvideQueueArray()
-        assert.fail('Unexpected code path')
-      } catch (err) {
-        assert.include(err.message, 'cid string is required')
-      }
+      const res = uut.deleteFromProvideQueueArray()
+      assert.isFalse(res)
     })
   })
 
   describe('#handlePin', () => {
     it('should handle Pin', async () => {
-      try {
-        sandbox.stub(uut.node, 'lazyDownload').resolves(true)
-        sandbox.stub(uut.node, 'provideCID').resolves(true)
-        sandbox.stub(uut.node, 'pinCid').resolves(true)
+      sandbox.stub(uut.node, 'lazyDownload').resolves(true)
+      sandbox.stub(uut.node, 'pinCid').resolves(true)
 
-        const inObj = {
-          fromPeerId: 'peerId',
-          cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
-        }
-        const result = await uut.handlePin(inObj)
-        assert.isTrue(result)
-      } catch (err) {
-        assert.fail('Unexpected code path')
+      const inObj = {
+        fromPeerId: 'peerId',
+        cid: 'bafkreigwi546vmpive76kqc3getucr43vced5vj47kwkxjajrichk2zk7q'
       }
+      const result = await uut.handlePin(inObj)
+      assert.isTrue(result)
     })
     it('should  skip "already pin" error', async () => {
       try {
@@ -459,30 +447,21 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
-    it('should throw error if cid is not provided', async () => {
-      try {
-        const inObj = {
-          fromPeerId: 'peerId'
-        }
-        await uut.handlePin(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'cid string is required')
+    it('should return false if cid is not provided', async () => {
+      const inObj = {
+        fromPeerId: 'peerId'
       }
+      const res = await uut.handlePin(inObj)
+      assert.isFalse(res)
     })
 
-    it('should throw error if fromPeerId is not provided', async () => {
-      try {
-        const inObj = {
-          cid: 'content id'
-        }
-        await uut.handlePin(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'fromPeerId string is required')
+    it('should return false if fromPeerId is not provided', async () => {
+      const inObj = {
+        cid: 'content id'
       }
+      const res = await uut.handlePin(inObj)
+
+      assert.isFalse(res)
     })
   })
 
@@ -515,30 +494,20 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
-    it('should throw error if cid is not provided', async () => {
-      try {
-        const inObj = {
-          fromPeerId: 'peerId'
-        }
-        await uut.handleUnpin(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'cid string is required')
+    it('should return false if cid is not provided', async () => {
+      const inObj = {
+        fromPeerId: 'peerId'
       }
+      const res = await uut.handleUnpin(inObj)
+      assert.isFalse(res)
     })
 
     it('should throw error if fromPeerId is not provided', async () => {
-      try {
-        const inObj = {
-          cid: 'content id'
-        }
-        await uut.handleUnpin(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'fromPeerId string is required')
+      const inObj = {
+        cid: 'content id'
       }
+      const res = await uut.handleUnpin(inObj)
+      assert.isFalse(res)
     })
   })
 
@@ -574,30 +543,20 @@ describe('#pinRPC.js', () => {
       }
     })
 
-    it('should throw error if cid is not provided', async () => {
-      try {
-        const inObj = {
-          fromPeerId: 'peerId'
-        }
-        await uut.handleProvide(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'cid string is required')
+    it('should return false if cid is not provided', async () => {
+      const inObj = {
+        fromPeerId: 'peerId'
       }
+      const result = await uut.handleProvide(inObj)
+      assert.isFalse(result)
     })
 
-    it('should throw error if fromPeerId is not provided', async () => {
-      try {
-        const inObj = {
-          cid: 'content id'
-        }
-        await uut.handleProvide(inObj)
-
-        assert.fail('Unexpected result')
-      } catch (err) {
-        assert.include(err.message, 'fromPeerId string is required')
+    it('should  return false  if fromPeerId is not provided', async () => {
+      const inObj = {
+        cid: 'content id'
       }
+      const result = await uut.handleProvide(inObj)
+      assert.isFalse(result)
     })
   })
 
