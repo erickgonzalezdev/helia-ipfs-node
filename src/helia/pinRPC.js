@@ -59,17 +59,23 @@ class PinRPC {
 
     this.log = this.node.log || console.log
 
-    this.pinQueue = new PQueue({ concurrency: 1, timeout: 60000 * 4 })
+    this.onPinQueueTimeout = config.onPinQueueTimeout || 60000 * 5 // 5 minutes default
+    this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
     this.onQueue = []
+    this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
-    this.provideQueue = new PQueue({ concurrency: 1, timeout: 1000 })
+    this.onProvideQueueTimeout = config.onProvideQueueTimeout || 60000 * 5 // 5 minutes default
+    this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = []
+    this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
+
     this.alreadyProvidedArr = []
     this.sleep = sleep
     // Bind all functions
     this.start = this.start.bind(this)
     this.requestRemotePin = this.requestRemotePin.bind(this)
     this.requestRemoteUnpin = this.requestRemoteUnpin.bind(this)
+    this.requestRemoteProvide = this.requestRemoteProvide.bind(this)
     this.listen = this.listen.bind(this)
     this.parsePinMsgProtocol = this.parsePinMsgProtocol.bind(this)
     this.parseStateMsgProtocol = this.parseStateMsgProtocol.bind(this)
@@ -77,9 +83,12 @@ class PinRPC {
     this.addToQueue = this.addToQueue.bind(this)
     this.handlePin = this.handlePin.bind(this)
     this.deleteFromQueueArray = this.deleteFromQueueArray.bind(this)
+    this.deleteFromProvideQueueArray = this.deleteFromProvideQueueArray.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.getSubscriptionList = this.getSubscriptionList.bind(this)
     this.handleUnpin = this.handleUnpin.bind(this)
+    this.handleProvide = this.handleProvide.bind(this)
+    this.addToProvideQueue = this.addToProvideQueue.bind(this)
 
     // state
     this.subscriptionList = []
@@ -335,7 +344,8 @@ class PinRPC {
 
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
-        await this.node.lazyDownload(cid) // Download CID
+        const signal = AbortSignal.timeout(this.pinQueue.timeout)
+        await this.node.lazyDownload(cid, null, signal) // Download CID
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
@@ -356,7 +366,7 @@ class PinRPC {
     } catch (error) {
       this.deleteFromQueueArray(inObj.cid)
       this.log('Error on PinRPC/handlePin()', error)
-      throw error
+      return false
     }
   }
 
@@ -385,7 +395,7 @@ class PinRPC {
       return true
     } catch (error) {
       this.log('Error on PinRPC/handleUnpin()', error)
-      throw error
+      return false
     }
   }
 
@@ -398,7 +408,8 @@ class PinRPC {
       const alreadyProvided = this.alreadyProvidedArr.find((val) => { return val === inObj.cid })
       if (!alreadyProvided) {
         this.log(`Trying to provide cid ${cid} on queue`)
-        await this.node.provideCID(cid) // provide CID
+        const signal = AbortSignal.timeout(this.provideQueue.timeout)
+        await this.node.provideCID(cid, { signal }) // provide CID
         this.alreadyProvidedArr.push(cid)
       }
 
@@ -416,8 +427,8 @@ class PinRPC {
     } catch (error) {
       this.deleteFromProvideQueueArray(inObj.cid)
       this.log(`Error Trying to provide cid ${inObj.cid}`)
-      this.log('Error on PinRPC/handleProvide()', error)
-      throw error
+      this.log('Error on PinRPC/handleProvide()', error.message)
+      return false
     }
   }
 
@@ -432,7 +443,7 @@ class PinRPC {
       return false
     } catch (error) {
       this.log('Error on PinRPC/deleteFromQueueArray()', error)
-      throw error
+      return false
     }
   }
 
@@ -447,7 +458,7 @@ class PinRPC {
       return false
     } catch (error) {
       this.log('Error on PinRPC/deleteFromQueueArray()', error)
-      throw error
+      return false
     }
   }
 
