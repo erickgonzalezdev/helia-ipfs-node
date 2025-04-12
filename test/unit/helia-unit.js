@@ -683,4 +683,30 @@ describe('#Helia.js', () => {
       }
     })
   })
+  describe('#handleRelay', () => {
+    it('should not add relay service if it is disabled', async () => {
+      try {
+        uut.opts.relay = false
+        const opts = {
+          services: {}
+        }
+        const result = await uut.handleRelay(opts)
+        assert.notProperty(result.services, 'relay')
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should add relay service if it is enabled', async () => {
+      try {
+        uut.opts.relay = true
+        const opts = {
+          services: {}
+        }
+        const result = await uut.handleRelay(opts)
+        assert.property(result.services, 'relay')
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+  })
 })

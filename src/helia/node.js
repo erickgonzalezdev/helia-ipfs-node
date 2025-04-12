@@ -117,7 +117,8 @@ class HeliaNode {
       announceAddresses: this.opts.announceAddresses || [],
       bootstrapList: this.opts.bootstrapList || bootstrapConfig,
       alias: this.opts.alias,
-      networking: this.opts.networking || 'minimal' // 'full'
+      networking: this.opts.networking || 'minimal', // 'full',
+      relay: this.opts.relay
     }
 
     let existingKey
@@ -136,8 +137,27 @@ class HeliaNode {
     return defaultOptions
   }
 
+  handleRelay (libp2pOpts) {
+    if (!this.opts.relay) return libp2pOpts
+    libp2pOpts.services.relay = circuitRelayServer({ // makes the node function as a relay server
+      hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
+      advertise: true,
+      reservations: {
+        maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
+        reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
+        applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
+        defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
+        defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
+        maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
+        maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
+      }
+    })
+
+    return libp2pOpts
+  }
+
   getMinimalNetworkOpts (privateKey, datastore) {
-    return {
+    const libp2pOpts = {
       privateKey,
       datastore,
       addresses: {
@@ -161,21 +181,28 @@ class HeliaNode {
         bootstrap(bootstrapConfig)
 
       ],
+      peerRouting: [
+        // delegatedContentRouting(client)
+      ],
       services: {
         identify: identify(),
         pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true
+          clientMode: false,
+          queryTimeout: 20000, // 20 seconds
+          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
         })
       },
       logger: disable()
     }
+
+    return this.handleRelay(libp2pOpts)
   }
 
   getFullNetworkOpts (privateKey, datastore) {
-    return {
+    const libp2pOpts = {
       privateKey,
       datastore,
       addresses: {
@@ -216,7 +243,9 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true
+          clientMode: false,
+          queryTimeout: 20000, // 20 seconds
+          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
 
         }),
         autoNAT: autoNAT(),
@@ -224,23 +253,12 @@ class HeliaNode {
           description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
           ttl: 7200, // TTL for port mappings (min 20 minutes)
           keepAlive: true // Refresh port mapping after TTL expires
-        }),
-        relay: circuitRelayServer({ // makes the node function as a relay server
-          hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
-          advertise: true,
-          reservations: {
-            maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
-            reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
-            applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
-            defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
-            defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
-            maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
-            maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
-          }
         })
+        /*     */
       },
       logger: disable()
     }
+    return this.handleRelay(libp2pOpts)
   }
 
   async start () {
@@ -270,6 +288,7 @@ class HeliaNode {
       if (this.opts.networking === 'full') {
         libp2pInputs = this.getFullNetworkOpts(keyPair, datastore)
       }
+      this.log(`RELAY : ${!!this.opts.relay}`)
 
       this.log(`Instantiating with ${this.opts.networking} networking`)
       this.log('Bootstrap List', options.bootstrapList)
