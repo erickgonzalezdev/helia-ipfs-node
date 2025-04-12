@@ -22,6 +22,7 @@ const netWorking = process.env.NETWORKING ? process.env.NETWORKING : 'minimal'
 const gbPeriod = process.env.GB_PERIOD ? process.env.GB_PERIOD : null
 const onPinQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
+const relay = process.env.RELAY
 
 //  Basic example with custom data.
 const start = async () => {
@@ -30,7 +31,14 @@ const start = async () => {
   bsList.push(pinServiceAddress)
 
   // Start helia node.
-  const node = new HeliaNode({ alias, wsPort, tcpPort, bootstrapList: bsList, networking: netWorking })
+  const node = new HeliaNode({
+    alias,
+    wsPort,
+    tcpPort,
+    bootstrapList: bsList,
+    networking: netWorking,
+    relay
+  })
   await node.start()
 
   // Start Gateway.
