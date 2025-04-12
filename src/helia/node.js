@@ -167,7 +167,10 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true
+          clientMode: false,
+          queryTimeout: 20000, // 20 seconds
+          protocolPrefix: '/ipfs'  // Standard prefix for IPFS DHT
+
         })
       },
       logger: disable()
@@ -216,7 +219,9 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true
+          clientMode: false,
+          queryTimeout: 20000, // 20 seconds
+          protocolPrefix: '/ipfs'  // Standard prefix for IPFS DHT
 
         }),
         autoNAT: autoNAT(),
