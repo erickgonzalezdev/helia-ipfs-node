@@ -146,10 +146,10 @@ class HeliaNode {
         maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
         reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
         applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
-        defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
-        defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
+        defaultDurationLimit: 2 * 60 * 1000 // the default maximum amount of time a relayed connection can be open for
+        /*       defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
         maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
-        maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously
+        maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously */
       }
     })
 
@@ -190,7 +190,7 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: false,
+          clientMode: true,
           queryTimeout: 20000, // 20 seconds
           protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
         })
@@ -243,7 +243,7 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: false,
+          clientMode: true,
           queryTimeout: 20000, // 20 seconds
           protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
 
