@@ -23,6 +23,8 @@ const gbPeriod = process.env.GB_PERIOD ? process.env.GB_PERIOD : null
 const onPinQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
+const announce = process.env.ANNOUNCE
+
 
 //  Basic example with custom data.
 const start = async () => {
@@ -37,7 +39,8 @@ const start = async () => {
     tcpPort,
     bootstrapList: bsList,
     networking: netWorking,
-    relay
+    relay,
+    announce
   })
   await node.start()
 

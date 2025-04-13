@@ -118,7 +118,8 @@ class HeliaNode {
       bootstrapList: this.opts.bootstrapList || bootstrapConfig,
       alias: this.opts.alias,
       networking: this.opts.networking || 'minimal', // 'full',
-      relay: this.opts.relay
+      relay: this.opts.relay,
+      announce: this.opts.announce
     }
 
     let existingKey
@@ -165,7 +166,8 @@ class HeliaNode {
           '/ip4/0.0.0.0/tcp/0',
           `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
           '/webrtc'
-        ]
+        ],
+        announce: this.opts.announce ? [`/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`] : [],
       },
       transports: [
         tcp({ logger: logger('upgrade') })
@@ -213,7 +215,10 @@ class HeliaNode {
           '/webrtc'
         ]
       },
-      announce: this.opts.announceAddresses,
+      announce: this.opts.announce ? [
+        `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
+        `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`,
+      ] : [],
       transports: [
         tcp({ logger: logger('upgrade') }),
         circuitRelayTransport({
@@ -601,10 +606,12 @@ class HeliaNode {
   async getMultiAddress () {
     try {
       // Attempt to guess our ip4 IP address.
-
       const multiaddrs = this.helia.libp2p.getMultiaddrs()
-      const ip4 = await this.publicIp()
-      this.ip4 = ip4
+      if(this.opts.announce) {
+        return multiaddrs
+      }
+        const ip4 = await this.publicIp()
+        this.ip4 = ip4
 
       let detectedMultiaddr = `/ip4/${ip4}/tcp/${this.opts.tcpPort}/p2p/${this.peerId}`
       detectedMultiaddr = this.multiaddr(detectedMultiaddr)
