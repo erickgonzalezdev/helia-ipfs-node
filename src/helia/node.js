@@ -165,14 +165,21 @@ class HeliaNode {
       datastore,
       addresses: {
         listen: [
-          '/ip4/0.0.0.0/tcp/0',
+          /*           '/ip4/0.0.0.0/tcp/0', */
           `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
+          `/ip4/0.0.0.0/tcp/${this.opts.wsPort}/ws`,
           '/webrtc'
         ],
-        announce: this.opts.announce ? [`/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`] : []
+        announce: this.opts.announce
+          ? [
+          `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
+          `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
+            ]
+          : []
       },
       transports: [
-        tcp({ logger: logger('upgrade') })
+        tcp({ logger: logger('upgrade') }),
+        webSockets()
       ],
       connectionEncrypters: [
         noise()
