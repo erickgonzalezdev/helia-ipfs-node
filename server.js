@@ -58,32 +58,43 @@ const start = async () => {
   // Start Garbage Collector
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
-
   if (pinServiceAddress) {
     // Renew Connection
     await reConnect(node)
     setInterval(async () => {
       await reConnect(node)
-    }, 60000)
+    }, 20000)
   }
 
-  setInterval(async () => {
-    try {
-      const connections = node.helia.libp2p.getConnections()
-      console.log('Connections: ', connections.length)
-    } catch (error) {
-      console.log('Error in getConnections: ', error)
-    }
-  }, 30000)
 }
 
 const reConnect = async (node) => {
   try {
-    console.log(`Trying  to connet to ${pinServiceAddress}`)
-    await node.connect(pinServiceAddress)
-    console.log('connected.')
+    const connections = node.helia.libp2p.getConnections()
+    console.log('Connections: ', connections.length)
+
+    let connection = connections.find(c => c.remoteAddr.toString() === pinServiceAddress)
+    console.log('connection', !!connection)
+    if (!connection) {
+      console.log(`Trying to connect to ${pinServiceAddress}`)
+      connection = await node.connect(pinServiceAddress)
+      console.log('connected.')
+    } else {
+      console.log('Already connected.')
+    }
+    const rtt = connection?.rtt
+    console.log('rtt', rtt)
+    if (rtt > 100) {
+      console.log('rtt is too high, trying to reconnect...')
+
+      await node.helia.libp2p.hangUp(connection.remoteAddr)
+      console.log('disconnected')
+      await node.connect(pinServiceAddress)
+      console.log('connected.')
+    }
   } catch (error) {
-    console.log('connection fails.')
+    console.log('error', error)
+    console.log('reconnect fails.')
   }
 }
 
