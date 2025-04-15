@@ -25,6 +25,7 @@ const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
 const serverDHTProvide = process.env.SERVER_DHT_PROVIDE
+const maxConnections = process.env.MAX_CONNECTIONS
 
 //  Basic example with custom data.
 const start = async () => {
@@ -41,7 +42,8 @@ const start = async () => {
     networking: netWorking,
     relay,
     announce,
-    serverDHTProvide
+    serverDHTProvide,
+    maxConnections
   })
   await node.start()
 
@@ -64,6 +66,15 @@ const start = async () => {
       await reConnect(node)
     }, 60000)
   }
+
+  setInterval(async () => {
+    try {
+      const connections = node.helia.libp2p.getConnections()
+      console.log('Connections: ', connections.length)
+    } catch (error) {
+      console.log('Error in getConnections: ', error)
+    }
+  }, 30000)
 }
 
 const reConnect = async (node) => {
