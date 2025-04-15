@@ -13,7 +13,7 @@ import { HeliaNode, Server, PinRPC, GB } from './src/lib.js'
 import { bootstrapConfig } from './src/util/bootstrap.js'
 
 const alias = process.env.ALIAS ? process.env.ALIAS : 'my node'
-const wsPort = process.env.WS_PORT ? process.env.ALIAS : 6001
+const wsPort = process.env.WS_PORT ? process.env.WS_PORT : 6001
 const tcpPort = process.env.TCP_PORT ? process.env.TCP_PORT : 6002
 const gatewayPort = process.env.GATEWAY_PORT ? process.env.GATEWAY_PORT : 8050
 const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_TOPIC : 'pin-rpc-topic'
