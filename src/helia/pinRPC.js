@@ -562,7 +562,7 @@ class PinRPC {
           for (const addr of sub.multiAddress) {
             try {
               await this.node.connect(addr)
-              this.log(`Successfully connected to peer ${sub.peerId} at ${addr}`)
+              this.log(`Successfully connected to peer : ${addr}`)
               // break // Exit the inner loop once connection is successful
             } catch (dialError) {
               this.log(`Failed to connect to ${addr}: ${dialError.message}`)
