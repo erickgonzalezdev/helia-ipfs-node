@@ -60,15 +60,8 @@ const start = async () => {
     await reConnect(node)
     setInterval(async () => {
       await reConnect(node)
-    }, 30000)
+    }, 60000)
   }
-
-  setInterval(async () => {
-    rpc.addToQueue({
-      cid: 'bafkreiadiwy4ubwiz7iq23fvc3punsp57eupsugyqtdkcvcuaio443m354',
-      fromPeerId: 'QmS4ghgMgfFvqPjB4WKXHaN15ZyT4K4JYZxY5X5xY5'
-    })
-  }, 10000)
 }
 
 const reConnect = async (node) => {
