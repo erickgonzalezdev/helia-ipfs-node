@@ -24,6 +24,7 @@ const onPinQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
+const serverDHTProvide = process.env.SERVER_DHT_PROVIDE
 
 //  Basic example with custom data.
 const start = async () => {
@@ -39,7 +40,8 @@ const start = async () => {
     bootstrapList: bsList,
     networking: netWorking,
     relay,
-    announce
+    announce,
+    serverDHTProvide
   })
   await node.start()
 

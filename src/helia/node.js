@@ -119,7 +119,8 @@ class HeliaNode {
       alias: this.opts.alias,
       networking: this.opts.networking || 'minimal', // 'full',
       relay: this.opts.relay,
-      announce: this.opts.announce
+      announce: this.opts.announce,
+      serverDHTProvide: this.opts.serverDHTProvide
     }
 
     let existingKey
@@ -192,7 +193,7 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true,
+          clientMode: !this.opts.serverDHTProvide,
           queryTimeout: 20000, // 20 seconds
           protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
         })
@@ -250,7 +251,7 @@ class HeliaNode {
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: true,
+          clientMode: !this.opts.serverDHTProvide,
           queryTimeout: 20000, // 20 seconds
           protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
 
@@ -296,7 +297,7 @@ class HeliaNode {
         libp2pInputs = this.getFullNetworkOpts(keyPair, datastore)
       }
       this.log(`RELAY : ${!!this.opts.relay}`)
-
+      this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
       this.log(`Instantiating with ${this.opts.networking} networking`)
       this.log('Bootstrap List', options.bootstrapList)
       const libp2p = await this.createLibp2p(libp2pInputs)
