@@ -60,12 +60,12 @@ class PinRPC {
     this.log = this.node.log || console.log
 
     this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
+    this.pinQueue = new PQueue({ concurrency: 2, timeout: this.onPinQueueTimeout })
     this.onQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
     this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
+    this.provideQueue = new PQueue({ concurrency: 2, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
 
@@ -356,8 +356,8 @@ class PinRPC {
 
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
-        const signal = AbortSignal.timeout(this.pinQueue.timeout)
-        await this.node.lazyDownload(cid, null, signal) // Download CID
+        //const signal = AbortSignal.timeout(this.pinQueue.timeout)
+        await this.node.lazyDownload(cid, null) // Download CID
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
@@ -420,8 +420,8 @@ class PinRPC {
       const alreadyProvided = this.alreadyProvidedArr.find((val) => { return val === inObj.cid })
       if (!alreadyProvided) {
         this.log(`Trying to provide cid ${cid} on queue`)
-        const signal = AbortSignal.timeout(this.provideQueue.timeout)
-        await this.node.provideCID(cid, { signal }) // provide CID
+        //const signal = AbortSignal.timeout(this.provideQueue.timeout)
+        await this.node.provideCID(cid) // provide CID
         this.alreadyProvidedArr.push(cid)
       }
 
