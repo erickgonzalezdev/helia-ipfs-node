@@ -391,7 +391,7 @@ describe('#pinRPC.js', () => {
     it('should delete cid from queue array', async () => {
       try {
         const cid = 'contentId1234'
-        uut.onQueue.push(cid)
+        uut.onQueue.push({ cid })
         const result = uut.deleteFromQueueArray(cid)
         assert.isTrue(result)
       } catch (err) {
@@ -407,7 +407,7 @@ describe('#pinRPC.js', () => {
     it('should delete cid from queue array', async () => {
       try {
         const cid = 'contentId1234'
-        uut.onProvideQueue.push(cid)
+        uut.onProvideQueue.push({ cid })
         const result = uut.deleteFromProvideQueueArray(cid)
         assert.isTrue(result)
       } catch (err) {
@@ -1085,6 +1085,34 @@ describe('#pinRPC.js', () => {
       try {
         const result = uut.getSubscriptionList()
         assert.isArray(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+  })
+  describe('cleanupQueues', () => {
+    it('should cleanup queues', async () => {
+      try {
+        const minutesAgoObj = new Date()
+        minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 4)
+        const minutesAgo = minutesAgoObj.getTime()
+
+        uut.onQueue = [{ cid: 'cid1', timestamp: minutesAgo }, { cid: 'cid2', timestamp: Date.now() }]
+        uut.onProvideQueue = [{ cid: 'cid1', timestamp: minutesAgo }, { cid: 'cid2', timestamp: Date.now() }]
+        const result = uut.cleanupQueues()
+        assert.isTrue(result)
+        assert.equal(uut.onQueue.length, 1)
+        assert.equal(uut.onProvideQueue.length, 1)
+      } catch (err) {
+        console.log(err)
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should handle error', async () => {
+      try {
+        uut.onQueue = null
+        const result = uut.cleanupQueues()
+        assert.isFalse(result)
       } catch (err) {
         assert.fail('Unexpected code path')
       }

@@ -25,7 +25,6 @@ const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
 
-
 //  Basic example with custom data.
 const start = async () => {
   // Add pin service address to the bootstrap config
@@ -63,6 +62,13 @@ const start = async () => {
       await reConnect(node)
     }, 30000)
   }
+
+  setInterval(async () => {
+    rpc.addToQueue({
+      cid: 'bafkreiadiwy4ubwiz7iq23fvc3punsp57eupsugyqtdkcvcuaio443m354',
+      fromPeerId: 'QmS4ghgMgfFvqPjB4WKXHaN15ZyT4K4JYZxY5X5xY5'
+    })
+  }, 10000)
 }
 
 const reConnect = async (node) => {
