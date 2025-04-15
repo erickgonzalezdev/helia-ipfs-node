@@ -84,7 +84,7 @@ const reConnect = async (node) => {
     }
     const rtt = connection?.rtt
     console.log('rtt', rtt)
-    if (rtt > 100) {
+    if (rtt > 700) {
       console.log('rtt is too high, trying to reconnect...')
 
       await node.helia.libp2p.hangUp(connection.remoteAddr)
