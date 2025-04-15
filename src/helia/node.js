@@ -120,7 +120,8 @@ class HeliaNode {
       networking: this.opts.networking || 'minimal', // 'full',
       relay: this.opts.relay,
       announce: this.opts.announce,
-      serverDHTProvide: this.opts.serverDHTProvide
+      serverDHTProvide: this.opts.serverDHTProvide,
+      maxConnections: this.opts.maxConnections || 100
     }
 
     let existingKey
@@ -179,6 +180,10 @@ class HeliaNode {
       streamMuxers: [
         yamux()
       ],
+      connectionManager: {
+        minConnections: 10, // Minimum number of connections to maintain
+        maxConnections: this.opts.maxConnections // Maximum number of connections to allow
+      },
       peerDiscovery: [
         // mdns(),
         bootstrap(bootstrapConfig)
@@ -236,6 +241,10 @@ class HeliaNode {
       streamMuxers: [
         yamux()
       ],
+      connectionManager: {
+        minConnections: 10, // Minimum number of connections to maintain
+        maxConnections: this.opts.maxConnections // Maximum number of connections to allow
+      },
       peerDiscovery: [
         // mdns() ,
         bootstrap(bootstrapConfig)
@@ -300,6 +309,7 @@ class HeliaNode {
       this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
       this.log(`Instantiating with ${this.opts.networking} networking`)
       this.log('Bootstrap List', options.bootstrapList)
+      this.log('Max connections ', this.opts.maxConnections)
       const libp2p = await this.createLibp2p(libp2pInputs)
 
       this.peerId = peerId
