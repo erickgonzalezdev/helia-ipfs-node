@@ -60,12 +60,12 @@ class PinRPC {
     this.log = this.node.log || console.log
 
     this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
+    this.pinQueue = new PQueue({ concurrency: 2, timeout: this.onPinQueueTimeout })
     this.onQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
     this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
+    this.provideQueue = new PQueue({ concurrency: 2, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
 
@@ -106,6 +106,10 @@ class PinRPC {
 
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
+
+    // Add new bind
+    this.renewSubscriptionConnections = this.renewSubscriptionConnections.bind(this)
+    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 60000)
   }
 
   async start () {
@@ -356,8 +360,8 @@ class PinRPC {
 
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
-        const signal = AbortSignal.timeout(this.pinQueue.timeout)
-        await this.node.lazyDownload(cid, null, signal) // Download CID
+        // const signal = AbortSignal.timeout(this.pinQueue.timeout)
+        await this.node.lazyDownload(cid, null) // Download CID
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
@@ -420,8 +424,8 @@ class PinRPC {
       const alreadyProvided = this.alreadyProvidedArr.find((val) => { return val === inObj.cid })
       if (!alreadyProvided) {
         this.log(`Trying to provide cid ${cid} on queue`)
-        const signal = AbortSignal.timeout(this.provideQueue.timeout)
-        await this.node.provideCID(cid, { signal }) // provide CID
+        // const signal = AbortSignal.timeout(this.provideQueue.timeout)
+        await this.node.provideCID(cid) // provide CID
         this.alreadyProvidedArr.push(cid)
       }
 
@@ -482,7 +486,6 @@ class PinRPC {
 
       const currentTime = new Date().getTime()
       const timestamp = timeStamp || currentTime
-      const minutesDifference = Math.floor((currentTime - timestamp) / (1000 * 60))
 
       const subsIndex = this.subscriptionList.findIndex((value) => { return peerId === value.peerId })
       const subscriptor = this.subscriptionList[subsIndex]
@@ -491,8 +494,8 @@ class PinRPC {
           alias,
           peerId,
           multiAddress,
-          timeStamp: timestamp,
-          minutesSinceLastUpdate: minutesDifference,
+          sentAt: timestamp,
+          sentAtStr: new Date(timeStamp).toISOString(),
           diskSize
         }
       } else {
@@ -500,11 +503,12 @@ class PinRPC {
           alias,
           peerId,
           multiAddress,
-          timeStamp: timestamp,
-          minutesSinceLastUpdate: minutesDifference,
+          sentAt: timestamp,
+          sentAtStr: new Date(timeStamp).toISOString(),
           diskSize
         })
       }
+      console.log(this.subscriptionList)
 
       return true
     } catch (error) {
@@ -545,6 +549,36 @@ class PinRPC {
       return true
     } catch (error) {
       this.log('Error in PinRPC/cleanupQueues()', error)
+      return false
+    }
+  }
+
+  async renewSubscriptionConnections () {
+    try {
+      clearInterval(this.reconnectSubsListInterval)
+      for (const sub of this.subscriptionList) {
+        try {
+          // Try to connect to each multiaddress until one succeeds
+          for (const addr of sub.multiAddress) {
+            try {
+              await this.node.connect(addr)
+              this.log(`Successfully connected to peer : ${addr}`)
+              // break // Exit the inner loop once connection is successful
+            } catch (dialError) {
+              this.log(`Failed to connect to ${addr}: ${dialError.message}`)
+              continue // Try next address if available
+            }
+          }
+        } catch (peerError) {
+          this.log(`Error connecting to peer ${sub.peerId}: ${peerError.message}`)
+          continue // Continue with next subscription
+        }
+      }
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      return true
+    } catch (error) {
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      this.log('Error in PinRPC/renewSubscriptionConnections()', error)
       return false
     }
   }

@@ -58,17 +58,24 @@ const start = async () => {
   // Start Garbage Collector
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
+
   if (pinServiceAddress) {
+    await node.connect(pinServiceAddress)
+    console.log('connected to pin service')
+  } else {
+    console.log('no pin service address provided')
+  }
+
+/*   if (pinServiceAddress) {
     // Renew Connection
     await reConnect(node)
     setInterval(async () => {
       await reConnect(node)
     }, 20000)
-  }
-
+  } */
 }
 
-const reConnect = async (node) => {
+/* const reConnect = async (node) => {
   try {
     const connections = node.helia.libp2p.getConnections()
     console.log('Connections: ', connections.length)
@@ -96,6 +103,6 @@ const reConnect = async (node) => {
     console.log('error', error)
     console.log('reconnect fails.')
   }
-}
+} */
 
 start()
