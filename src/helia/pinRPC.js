@@ -61,12 +61,12 @@ class PinRPC {
 
     this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
     this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
-    this.onQueue = []
+    this.onQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
     this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
     this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
-    this.onProvideQueue = []
+    this.onProvideQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
 
     this.alreadyProvidedArr = []
@@ -93,13 +93,19 @@ class PinRPC {
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
-    this.notificationTimer = 60000
+    this.notificationTimer = 30000
 
     // node disk stats
     this.diskStats = {
       size: 0, // mb
       timeStamp: new Date().getTime() // last disk update
     }
+
+    // Bind the new cleanup function
+    this.cleanupQueues = this.cleanupQueues.bind(this)
+
+    // Add cleanup interval (run every minute)
+    this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
   }
 
   async start () {
@@ -304,12 +310,15 @@ class PinRPC {
 
   addToQueue (inObj = {}) {
     try {
-      const alreadyInQueue = this.onQueue.find((val) => { return val === inObj.cid })
+      const alreadyInQueue = this.onQueue.find((val) => val.cid === inObj.cid)
       if (alreadyInQueue) {
         this.log(`cid already on queue : ${inObj.cid}`)
         return true
       }
-      this.onQueue.push(inObj.cid)
+      this.onQueue.push({
+        cid: inObj.cid,
+        timestamp: Date.now()
+      })
       this.log(`Adding pin to queue for cid ${inObj.cid}`)
       this.pinQueue.add(async () => { await this.handlePin(inObj) })
       return true
@@ -321,12 +330,15 @@ class PinRPC {
 
   addToProvideQueue (inObj = {}) {
     try {
-      const alreadyInQueue = this.onProvideQueue.find((val) => { return val === inObj.cid })
+      const alreadyInQueue = this.onProvideQueue.find((val) => val.cid === inObj.cid)
       if (alreadyInQueue) {
         this.log(`cid already on provide queue : ${inObj.cid}`)
         return true
       }
-      this.onProvideQueue.push(inObj.cid)
+      this.onProvideQueue.push({
+        cid: inObj.cid,
+        timestamp: Date.now()
+      })
       this.log(`Adding pin to provide queue for cid ${inObj.cid}`)
       this.provideQueue.add(async () => { await this.handleProvide(inObj) })
       return true
@@ -435,7 +447,7 @@ class PinRPC {
   deleteFromQueueArray (cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
-      const cidIndex = this.onQueue.findIndex((val) => { return val === cid })
+      const cidIndex = this.onQueue.findIndex((val) => val.cid === cid)
       if (cidIndex >= 0) {
         this.onQueue.splice(cidIndex, 1)
         return true
@@ -450,7 +462,7 @@ class PinRPC {
   deleteFromProvideQueueArray (cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
-      const cidIndex = this.onProvideQueue.findIndex((val) => { return val === cid })
+      const cidIndex = this.onProvideQueue.findIndex((val) => val.cid === cid)
       if (cidIndex >= 0) {
         this.onProvideQueue.splice(cidIndex, 1)
         return true
@@ -468,6 +480,10 @@ class PinRPC {
       if (!peerId || typeof peerId !== 'string') throw new Error('peerId is required')
       if (!Array.isArray(multiAddress)) throw new Error('multiAddress must be an array of addresses')
 
+      const currentTime = new Date().getTime()
+      const timestamp = timeStamp || currentTime
+      const minutesDifference = Math.floor((currentTime - timestamp) / (1000 * 60))
+
       const subsIndex = this.subscriptionList.findIndex((value) => { return peerId === value.peerId })
       const subscriptor = this.subscriptionList[subsIndex]
       if (subscriptor) {
@@ -475,7 +491,8 @@ class PinRPC {
           alias,
           peerId,
           multiAddress,
-          timeStamp: timeStamp || new Date().getTime(),
+          timeStamp: timestamp,
+          minutesSinceLastUpdate: minutesDifference,
           diskSize
         }
       } else {
@@ -483,7 +500,8 @@ class PinRPC {
           alias,
           peerId,
           multiAddress,
-          timeStamp: timeStamp || new Date().getTime(),
+          timeStamp: timestamp,
+          minutesSinceLastUpdate: minutesDifference,
           diskSize
         })
       }
@@ -509,6 +527,26 @@ class PinRPC {
 
   defaultRemoteProvideCallback (inObj = {}) {
     this.log(`Success remote provide cid  : ${inObj.cid} on ${inObj.host} `)
+  }
+
+  cleanupQueues () {
+    try {
+      const minutesAgoObj = new Date()
+      minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 3)
+
+      const minutesAgo = minutesAgoObj.getTime()
+      // Clean onQueue
+      this.onQueue = this.onQueue.filter(item => item.timestamp > minutesAgo)
+
+      // Clean onProvideQueue
+      this.onProvideQueue = this.onProvideQueue.filter(item => item.timestamp > minutesAgo)
+
+      console.log(`Cleaned queues. onQueue: ${this.onQueue.length}, onProvideQueue: ${this.onProvideQueue.length}`)
+      return true
+    } catch (error) {
+      this.log('Error in PinRPC/cleanupQueues()', error)
+      return false
+    }
   }
 }
 

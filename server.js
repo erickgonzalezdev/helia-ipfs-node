@@ -25,7 +25,6 @@ const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
 
-
 //  Basic example with custom data.
 const start = async () => {
   // Add pin service address to the bootstrap config
@@ -61,7 +60,7 @@ const start = async () => {
     await reConnect(node)
     setInterval(async () => {
       await reConnect(node)
-    }, 30000)
+    }, 60000)
   }
 }
 

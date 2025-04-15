@@ -167,7 +167,7 @@ class HeliaNode {
           `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
           '/webrtc'
         ],
-        announce: this.opts.announce ? [`/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`] : [],
+        announce: this.opts.announce ? [`/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`] : []
       },
       transports: [
         tcp({ logger: logger('upgrade') })
@@ -215,10 +215,12 @@ class HeliaNode {
           '/webrtc'
         ]
       },
-      announce: this.opts.announce ? [
+      announce: this.opts.announce
+        ? [
         `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-        `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`,
-      ] : [],
+        `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
+          ]
+        : [],
       transports: [
         tcp({ logger: logger('upgrade') }),
         circuitRelayTransport({
@@ -548,6 +550,8 @@ class HeliaNode {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
       }
+      // Clean up stale downloads
+      this.cleanDownloading()
 
       if (!length) length = 10 ** 6 * 50 // max 50mb chunks
 
@@ -569,7 +573,10 @@ class HeliaNode {
         }
       } while (!ready)
 
-      this.downloading[cid] = cid
+      this.downloading[cid] = {
+        cid,
+        timestamp: Date.now()
+      }
 
       // console.log(stats)
       let chunkLength = 0
@@ -607,11 +614,12 @@ class HeliaNode {
     try {
       // Attempt to guess our ip4 IP address.
       const multiaddrs = this.helia.libp2p.getMultiaddrs()
-      if(this.opts.announce) {
+      if (this.opts.announce) {
+        this.addresses = multiaddrs
         return multiaddrs
       }
-        const ip4 = await this.publicIp()
-        this.ip4 = ip4
+      const ip4 = await this.publicIp()
+      this.ip4 = ip4
 
       let detectedMultiaddr = `/ip4/${ip4}/tcp/${this.opts.tcpPort}/p2p/${this.peerId}`
       detectedMultiaddr = this.multiaddr(detectedMultiaddr)
@@ -749,6 +757,26 @@ class HeliaNode {
     } catch (err) {
       this.log('Error in provideCID()', err)
       throw err
+    }
+  }
+
+  cleanDownloading () {
+    try {
+      const minutesAgoObj = new Date()
+      minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 2)
+
+      const minutesAgo = minutesAgoObj.getTime()
+
+      Object.keys(this.downloading).forEach(cid => {
+        if (this.downloading[cid] && (this.downloading[cid].timestamp) < minutesAgo) {
+          delete this.downloading[cid]
+        }
+      })
+      return true
+    } catch (error) {
+      console.log(error)
+      this.log('Error in cleanDownloading(): ', error)
+      return false
     }
   }
 }

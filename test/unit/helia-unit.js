@@ -53,6 +53,17 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
+    it('should start helia node full nwtworking and announce mode', async () => {
+      try {
+        uut.opts.announce = true
+        sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
+        sandbox.stub(uut, 'saveKey').resolves(true)
+
+        await uut.start()
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
 
     it('should start helia node with a new salt', async () => {
       try {
@@ -399,6 +410,17 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
+    it('should get MultiAddress on announce mode', async () => {
+      try {
+        uut.opts.announce = true
+        sandbox.stub(uut.helia.libp2p, 'getMultiaddrs').returns(['addresses'])
+        const addresses = await uut.getMultiAddress()
+        assert.isArray(addresses)
+      } catch (err) {
+        // console.log('Err',err)
+        assert.fail('Unexpected result')
+      }
+    })
     it('should handle error', async () => {
       try {
         sandbox.stub(uut.helia.libp2p, 'getMultiaddrs').throws(new Error('test error'))
@@ -707,6 +729,41 @@ describe('#Helia.js', () => {
       } catch (err) {
         assert.fail('Unexpected result')
       }
+    })
+  })
+  describe('#cleanDownloading', () => {
+    it('should clean downloading', async () => {
+      try {
+        const minutesAgoObj = new Date()
+        minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 3)
+        uut.downloading = {
+          bafybeigfzpnw7rzejeukg4dwet3atopfm6oelchqn4ikow7pfb4bopiiey: {
+            timestamp: minutesAgoObj.getTime()
+          }
+        }
+        uut.cleanDownloading()
+        assert.notProperty(uut.downloading, 'bafybeigfzpnw7rzejeukg4dwet3atopfm6oelchqn4ikow7pfb4bopiiey')
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should not clean downloading if it is not stale', async () => {
+      try {
+        uut.downloading = {
+          bafybeigfzpnw7rzejeukg4dwet3atopfm6oelchqn4ikow7pfb4bopiiey: {
+            timestamp: Date.now()
+          }
+        }
+        uut.cleanDownloading()
+        assert.property(uut.downloading, 'bafybeigfzpnw7rzejeukg4dwet3atopfm6oelchqn4ikow7pfb4bopiiey')
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should handle error', async () => {
+      uut.downloading = null
+      const res = uut.cleanDownloading()
+      assert.isFalse(res)
     })
   })
 })
