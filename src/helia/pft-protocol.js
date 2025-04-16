@@ -39,6 +39,8 @@ class PFTProtocol {
 
   async handlePFTProtocol ({ stream }) {
     try {
+      this.log(`New PFT connection`)
+
       const decoder = new TextDecoder()
       const source = stream.source
       const sink = stream.sink
@@ -49,6 +51,7 @@ class PFTProtocol {
         // console.log('chunk', chunk.bufs[0])
         cid += decoder.decode(chunk.bufs[0])
       }
+      this.log(`PFT connection requesting cid: ${cid}`)
 
       const has = await this.node.helia.blockstore.has(CID.parse(cid))
 
@@ -80,7 +83,7 @@ class PFTProtocol {
 
   async fetchCidFromPeer (cid, address) {
     try {
-      this.log('request new content')
+      this.log('Request new content')
       const stream = await this.node.helia.libp2p.dialProtocol([multiaddr(address)], this.protocol)
       const encoder = new TextEncoder()
 
@@ -89,6 +92,7 @@ class PFTProtocol {
 
       const cidAdded = await this.node.ufs.addBytes(async function * () {
         for await (const chunk of stream.source) {
+          this.log('Received chunk')
           // console.log('chunk', chunk.subarray())
           yield chunk.subarray()
         }
@@ -100,7 +104,7 @@ class PFTProtocol {
       this.log('downloaded cid', cid)
       return true
     } catch (error) {
-      this.log('Error in fetchCid(): ', error)
+      this.log('Error in fetchCidFromPeer(): ', error)
       return false
     }
   }

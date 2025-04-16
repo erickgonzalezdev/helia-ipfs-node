@@ -564,7 +564,7 @@ class PinRPC {
       for (const sub of this.subscriptionList) {
         try {
           // Try to connect to each multiaddress until one succeeds
-          for (const addr of sub.multiAddress) {
+          for (const addr of sub.multiAddresses) {
             try {
               await this.node.connect(addr)
               this.log(`Successfully connected to peer : ${addr}`)
