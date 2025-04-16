@@ -11,7 +11,6 @@ class RouterHanlder {
   }
 
   async start (app) {
-    this.router.get('/debug/:debugcid', this.controller.getContent)
     this.router.get('/:cid/:name', this.controller.getContent)
     this.router.get('/:cid', this.controller.getContent)
 
