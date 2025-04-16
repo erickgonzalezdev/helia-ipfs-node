@@ -40,6 +40,7 @@ import { sleep } from '../util/util.js'
 
 class PinRPC {
   constructor (config = {}) {
+    this.allowProvideRequest = config.allowProvideRequest || false
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on pinRPC constructor')
     }
@@ -334,6 +335,10 @@ class PinRPC {
 
   addToProvideQueue (inObj = {}) {
     try {
+      if (!this.allowProvideRequest) {
+        this.log('Provide request is not allowed')
+        return true
+      }
       const alreadyInQueue = this.onProvideQueue.find((val) => val.cid === inObj.cid)
       if (alreadyInQueue) {
         this.log(`cid already on provide queue : ${inObj.cid}`)

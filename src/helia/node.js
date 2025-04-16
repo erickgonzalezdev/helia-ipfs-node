@@ -104,6 +104,8 @@ class HeliaNode {
     this.sleep = sleep
     this.getMinimalNetworkOpts = this.getMinimalNetworkOpts.bind(this)
     this.getFullNetworkOpts = this.getFullNetworkOpts.bind(this)
+    this.handleDHT = this.handleDHT.bind(this)
+    this.handleRelay = this.handleRelay.bind(this)
     this.log = inputOptions.log || console.log
   }
 
@@ -114,13 +116,13 @@ class HeliaNode {
       nodeKey: this.opts.nodeKey || this.generateSalt(),
       tcpPort: this.opts.tcpPort || 4001,
       wsPort: this.opts.wsPort || 4002,
-      announceAddresses: this.opts.announceAddresses || [],
       bootstrapList: this.opts.bootstrapList || bootstrapConfig,
       alias: this.opts.alias,
       networking: this.opts.networking || 'minimal', // 'full',
       relay: this.opts.relay,
       announce: this.opts.announce,
       serverDHTProvide: this.opts.serverDHTProvide,
+      dht: this.opts.dht,
       maxConnections: this.opts.maxConnections || 100
     }
 
@@ -146,21 +148,30 @@ class HeliaNode {
       hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
       advertise: true,
       reservations: {
-        maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
-        reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
-        applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
-        defaultDurationLimit: 2 * 60 * 1000 // the default maximum amount of time a relayed connection can be open for
-        /*       defaultDataLimit: BigInt(2 << 7), // the default maximum number of bytes that can be transferred over a relayed connection
-        maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
-        maxOutboundHopStreams: 64// how many outbound HOP streams are allow simultaneously */
+        maxReservations: 15,
+        reservationClearInterval: 300 * 1000,
+        applyDefaultLimit: true,
+        defaultDurationLimit: 2 * 60 * 1000
       }
     })
 
     return libp2pOpts
   }
 
+  handleDHT (libp2pOpts) {
+    if (!this.opts.dht) return libp2pOpts
+    libp2pOpts.services.dht = kadDHT({
+      protocol: '/ipfs/kad/1.0.0',
+      peerInfoMapper: removePrivateAddressesMapper,
+      clientMode: !this.opts.serverDHTProvide,
+      queryTimeout: 20000,
+      protocolPrefix: '/ipfs'
+    })
+    return libp2pOpts
+  }
+
   getMinimalNetworkOpts (privateKey, datastore) {
-    const libp2pOpts = {
+    let libp2pOpts = {
       privateKey,
       datastore,
       addresses: {
@@ -212,12 +223,14 @@ class HeliaNode {
       },
       logger: disable()
     }
-
-    return this.handleRelay(libp2pOpts)
+    
+    libp2pOpts = this.handleRelay(libp2pOpts)
+    libp2pOpts = this.handleDHT(libp2pOpts)
+    return libp2pOpts
   }
 
   getFullNetworkOpts (privateKey, datastore) {
-    const libp2pOpts = {
+    let libp2pOpts = {
       privateKey,
       datastore,
       addresses: {
@@ -282,8 +295,9 @@ class HeliaNode {
       },
       logger: disable()
     }
-    return this.handleRelay(libp2pOpts)
-  }
+    libp2pOpts = this.handleRelay(libp2pOpts)
+    libp2pOpts = this.handleDHT(libp2pOpts)
+    return libp2pOpts  }
 
   async start () {
     try {

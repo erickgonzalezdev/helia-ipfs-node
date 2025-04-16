@@ -26,6 +26,7 @@ const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
 const serverDHTProvide = process.env.SERVER_DHT_PROVIDE
 const maxConnections = process.env.MAX_CONNECTIONS
+const allowProvideRequest = process.env.ALLOW_PROVIDE_REQUEST
 
 //  Basic example with custom data.
 const start = async () => {
@@ -52,7 +53,13 @@ const start = async () => {
   await gateway.start()
 
   // Start Pin RPC
-  const rpc = new PinRPC({ node, topic: pinServiceTopic, onPinQueueTimeout, onProvideQueueTimeout })
+  const rpc = new PinRPC({
+    node,
+    topic: pinServiceTopic,
+    onPinQueueTimeout,
+    onProvideQueueTimeout,
+    allowProvideRequest
+  })
   await rpc.start()
 
   // Start Garbage Collector
@@ -66,13 +73,13 @@ const start = async () => {
     console.log('no pin service address provided')
   }
 
-/*   if (pinServiceAddress) {
-    // Renew Connection
-    await reConnect(node)
-    setInterval(async () => {
+  /*   if (pinServiceAddress) {
+      // Renew Connection
       await reConnect(node)
-    }, 20000)
-  } */
+      setInterval(async () => {
+        await reConnect(node)
+      }, 20000)
+    } */
 }
 
 /* const reConnect = async (node) => {
