@@ -494,7 +494,7 @@ class PinRPC {
         this.subscriptionList[subsIndex] = {
           alias,
           peerId,
-          multiAddress,
+          multiAddresses: multiAddress,
           sentAt: timestamp,
           sentAtStr: new Date(timeStamp).toISOString(),
           diskSize
@@ -503,11 +503,14 @@ class PinRPC {
         this.subscriptionList.push({
           alias,
           peerId,
-          multiAddress,
+          multiAddresses: multiAddress,
           sentAt: timestamp,
           sentAtStr: new Date(timeStamp).toISOString(),
           diskSize
         })
+      }
+      if (multiAddress[0]) {
+        this.node.ptfp.addKnownPeer(multiAddress[0])
       }
 
       return true

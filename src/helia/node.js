@@ -43,6 +43,8 @@ import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
+import PFTProtocol from './pft-protocol.js'
+
 // default is to use ipfs.io
 const client = createIpfsHttpClient({
   // use default api settings
@@ -343,6 +345,9 @@ class HeliaNode {
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)
 
       this.log(`Node Alias : ${this.opts.alias}`)
+
+      this.ptfp = new PFTProtocol({ node: this })
+      this.ptfp.start()
       return this.helia
     } catch (error) {
       this.log('error in helia/start()', error)
@@ -355,8 +360,8 @@ class HeliaNode {
     try {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
-      await this.helia.libp2p.dial(multiaddr(addr))
-      return true
+      const conection = await this.helia.libp2p.dial(multiaddr(addr))
+      return conection
     } catch (err) {
       this.log('Error helia connect()  ', err)
       throw err

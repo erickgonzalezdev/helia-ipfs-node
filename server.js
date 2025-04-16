@@ -65,7 +65,6 @@ const start = async () => {
   } else {
     console.log('no pin service address provided')
   }
-
 }
 
 start()

@@ -15,13 +15,13 @@ export default class Gateway {
     this.log = this.node.log || console.log
   }
 
-
   async getContent (ctx) {
     try {
       const { cid } = ctx.params
+      // try to download the cid on the private nerwork first
+      await this.node.ptfp.downloadCid(cid)
 
-
-      let cidToFetch = cid 
+      let cidToFetch = cid
       // Verify if the cid is a folder
       const parsed = await this.parseFolderFormat(ctx)
 
