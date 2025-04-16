@@ -9,5 +9,6 @@ index2.js
 massive-pin-example.js
 data-path/*
 start-dev.sh
+start-dev2.sh
 start-prod.sh
 server2.js
