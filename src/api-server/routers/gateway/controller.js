@@ -13,6 +13,7 @@ export default class Gateway {
     this.handleError = this.handleError.bind(this)
     this.setHelloWorld = this.setHelloWorld.bind(this)
     this.log = this.node.log || console.log
+    this.forceToGetContent = this.forceToGetContent.bind(this)
   }
 
   async forceToGetContent (cid) {
@@ -32,6 +33,10 @@ export default class Gateway {
       console.log('debugcid', debugcid)
 
       let cidToFetch = cid || debugcid
+      if(debugcid) {
+        await this.forceToGetContent(debugcid)
+        return
+      }
       ctx.params.cid = cidToFetch
       // Verify if the cid is a folder
       const parsed = await this.parseFolderFormat(ctx)
