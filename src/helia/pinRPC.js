@@ -362,7 +362,7 @@ class PinRPC {
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
         // const signal = AbortSignal.timeout(this.pinQueue.timeout)
-        const downloaded = await this.node.ptfp.downloadCid(cid) // Download CID
+        const downloaded = await this.node.pftp.downloadCid(cid) // Download CID
         if (!downloaded) throw new Error('Failed to download cid')
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
@@ -511,7 +511,7 @@ class PinRPC {
         })
       }
       if (multiAddress[0]) {
-        this.node.ptfp.addKnownPeer(multiAddress[0])
+        this.node.pftp.addKnownPeer(multiAddress[0])
       }
 
       return true

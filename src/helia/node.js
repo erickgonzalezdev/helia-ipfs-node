@@ -346,8 +346,8 @@ class HeliaNode {
 
       this.log(`Node Alias : ${this.opts.alias}`)
 
-      this.ptfp = new PFTProtocol({ node: this })
-      this.ptfp.start()
+      this.pftp = new PFTProtocol({ node: this })
+      this.pftp.start()
       return this.helia
     } catch (error) {
       this.log('error in helia/start()', error)
