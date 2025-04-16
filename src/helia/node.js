@@ -54,7 +54,7 @@ const client = createIpfsHttpClient({
 })
 
 class HeliaNode {
-  constructor (inputOptions = {}) {
+  constructor(inputOptions = {}) {
     this.multiaddr = multiaddr
     this.publicIp = publicIpv4
     this.createHelia = createHelia
@@ -110,7 +110,7 @@ class HeliaNode {
   }
 
   // Parse injected options
-  async parseOptions () {
+  async parseOptions() {
     const defaultOptions = {
       storePath: this.opts.storePath || this.path.resolve('./helia-data'),
       nodeKey: this.opts.nodeKey || this.generateSalt(),
@@ -142,7 +142,7 @@ class HeliaNode {
     return defaultOptions
   }
 
-  handleRelay (libp2pOpts) {
+  handleRelay(libp2pOpts) {
     if (!this.opts.relay) return libp2pOpts
     libp2pOpts.services.relay = circuitRelayServer({ // makes the node function as a relay server
       hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
@@ -161,7 +161,7 @@ class HeliaNode {
     return libp2pOpts
   }
 
-  getMinimalNetworkOpts (privateKey, datastore) {
+  getMinimalNetworkOpts(privateKey, datastore) {
     const libp2pOpts = {
       privateKey,
       datastore,
@@ -174,9 +174,9 @@ class HeliaNode {
         ],
         announce: this.opts.announce
           ? [
-          `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-          `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-            ]
+            `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
+            `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
+          ]
           : []
       },
       transports: [
@@ -218,7 +218,7 @@ class HeliaNode {
     return this.handleRelay(libp2pOpts)
   }
 
-  getFullNetworkOpts (privateKey, datastore) {
+  getFullNetworkOpts(privateKey, datastore) {
     const libp2pOpts = {
       privateKey,
       datastore,
@@ -232,9 +232,9 @@ class HeliaNode {
       },
       announce: this.opts.announce
         ? [
-        `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-        `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-          ]
+          `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
+          `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
+        ]
         : [],
       transports: [
         tcp({ logger: logger('upgrade') }),
@@ -287,7 +287,7 @@ class HeliaNode {
     return this.handleRelay(libp2pOpts)
   }
 
-  async start () {
+  async start() {
     try {
       const options = await this.parseOptions()
       this.log('Starting Helia IPFS Node')
@@ -356,7 +356,7 @@ class HeliaNode {
   }
 
   // Dial to multiAddress
-  async connect (addr) {
+  async connect(addr) {
     try {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
@@ -369,7 +369,7 @@ class HeliaNode {
   }
 
   // Dial to multiAddress
-  async connectMultiaddr (multiaddr) {
+  async connectMultiaddr(multiaddr) {
     try {
       if (!multiaddr) { throw new Error('multiaddr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
@@ -382,7 +382,7 @@ class HeliaNode {
   }
 
   // Upload content to the node
-  async upload (path) {
+  async upload(path) {
     try {
       if (!path) { throw new Error('path is required!') }
 
@@ -411,7 +411,7 @@ class HeliaNode {
   }
 
   // Upload file to the node
-  async uploadFile (path) {
+  async uploadFile(path) {
     try {
       if (!path) { throw new Error('path is required!') }
       if (!this.fs.existsSync(path)) { throw new Error('File not found!') }
@@ -427,7 +427,7 @@ class HeliaNode {
   }
 
   // Upload dir to the node
-  async uploadDir (dir) {
+  async uploadDir(dir) {
     try {
       if (!dir) { throw new Error('Dir is required!') }
       if (!this.fs.existsSync(path)) { throw new Error('Dir not found!') }
@@ -473,7 +473,7 @@ class HeliaNode {
   } */
 
   // Upload object with dir wrapper
-  async uploadStrOrObj (value) {
+  async uploadStrOrObj(value) {
     try {
       if (!value) { throw new Error('object or string is required!') }
       if (typeof value !== 'string' && typeof value !== 'object') {
@@ -523,12 +523,12 @@ class HeliaNode {
     }
   }
  */
-  generateSalt (phrase) {
+  generateSalt(phrase) {
     return crypto.randomBytes(16).toString('hex')
   }
 
   // Get all connected nodes
-  getConnections () {
+  getConnections() {
     const cs = this.helia.libp2p.getConnections()
     return cs
   }
@@ -550,8 +550,9 @@ class HeliaNode {
   } */
 
   // Get content from CID
-  async getContent (CID, options = {}) {
+  async getContent(CID, options = {}) {
     try {
+
       if (!CID || typeof CID !== 'string') {
         throw new Error('CID string is required.')
       }
@@ -568,7 +569,7 @@ class HeliaNode {
     }
   }
 
-  async lazyDownload (cid, length, signal) {
+  async lazyDownload(cid, length, signal) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -618,7 +619,7 @@ class HeliaNode {
     }
   }
 
-  async getStat (cid, options = {}) {
+  async getStat(cid, options = {}) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -633,7 +634,7 @@ class HeliaNode {
   }
 
   // Get node multi addresses
-  async getMultiAddress () {
+  async getMultiAddress() {
     try {
       // Attempt to guess our ip4 IP address.
       const multiaddrs = this.helia.libp2p.getMultiaddrs()
@@ -658,7 +659,7 @@ class HeliaNode {
   }
 
   // Pin a CID
-  async pinCid (cid) {
+  async pinCid(cid) {
     if (!cid) {
       throw new Error('CID is required.')
     }
@@ -679,7 +680,7 @@ class HeliaNode {
   }
 
   // UN-pin a CID
-  async unPinCid (cid) {
+  async unPinCid(cid) {
     if (!cid) {
       throw new Error('CID is required.')
     }
@@ -696,7 +697,7 @@ class HeliaNode {
   }
 
   // Get all pins list.
-  async getPins () {
+  async getPins() {
     return new this.Promise(async (resolves, reject) => {
       try {
         const pins = []
@@ -712,7 +713,7 @@ class HeliaNode {
     })
   }
 
-  saveKey (key, path) {
+  saveKey(key, path) {
     // this.log('fs1', this.fs)
     return new this.Promise((resolve, reject) => {
       try {
@@ -737,7 +738,7 @@ class HeliaNode {
     })
   }
 
-  readKey (path) {
+  readKey(path) {
     return new Promise((resolve, reject) => {
       try {
         if (!path || typeof path !== 'string') {
@@ -757,7 +758,7 @@ class HeliaNode {
     })
   }
 
-  async getDiskSize () {
+  async getDiskSize() {
     try {
       const size = await this.getFolderSize.strict(this.opts.storePath)
       const mbSize = (size / 1000 / 1000).toFixed(2)
@@ -769,7 +770,7 @@ class HeliaNode {
     }
   }
 
-  async provideCID (cid, options) {
+  async provideCID(cid, options) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -783,7 +784,7 @@ class HeliaNode {
     }
   }
 
-  cleanDownloading () {
+  cleanDownloading() {
     try {
       const minutesAgoObj = new Date()
       minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 2)
