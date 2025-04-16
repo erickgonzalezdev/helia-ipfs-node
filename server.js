@@ -66,43 +66,6 @@ const start = async () => {
     console.log('no pin service address provided')
   }
 
-/*   if (pinServiceAddress) {
-    // Renew Connection
-    await reConnect(node)
-    setInterval(async () => {
-      await reConnect(node)
-    }, 20000)
-  } */
 }
-
-/* const reConnect = async (node) => {
-  try {
-    const connections = node.helia.libp2p.getConnections()
-    console.log('Connections: ', connections.length)
-
-    let connection = connections.find(c => c.remoteAddr.toString() === pinServiceAddress)
-    console.log('connection', !!connection)
-    if (!connection) {
-      console.log(`Trying to connect to ${pinServiceAddress}`)
-      connection = await node.connect(pinServiceAddress)
-      console.log('connected.')
-    } else {
-      console.log('Already connected.')
-    }
-    const rtt = connection?.rtt
-    console.log('rtt', rtt)
-    if (rtt > 700) {
-      console.log('rtt is too high, trying to reconnect...')
-
-      await node.helia.libp2p.hangUp(connection.remoteAddr)
-      console.log('disconnected')
-      await node.connect(pinServiceAddress)
-      console.log('connected.')
-    }
-  } catch (error) {
-    console.log('error', error)
-    console.log('reconnect fails.')
-  }
-} */
 
 start()

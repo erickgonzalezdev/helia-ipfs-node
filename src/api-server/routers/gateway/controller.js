@@ -15,24 +15,13 @@ export default class Gateway {
     this.log = this.node.log || console.log
   }
 
-  async forceToGetContent (cid) {
-   const totalFileChunks = await this.node.getContent(cid)
-   const fileTypeRes = await fileTypeFromBuffer(totalFileChunks)
-   const fileType = fileTypeRes || { mime: 'text/plain' }
-
-   ctx.type = fileType.mime
-   ctx.body = totalFileChunks
-
-  }
 
   async getContent (ctx) {
     try {
-      const { cid , debugcid} = ctx.params
-      console.log('cid', cid)
-      console.log('debugcid', debugcid)
+      const { cid } = ctx.params
 
-      let cidToFetch = cid || debugcid
-      ctx.params.cid = cidToFetch
+
+      let cidToFetch = cid 
       // Verify if the cid is a folder
       const parsed = await this.parseFolderFormat(ctx)
 

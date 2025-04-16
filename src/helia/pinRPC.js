@@ -60,12 +60,12 @@ class PinRPC {
     this.log = this.node.log || console.log
 
     this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.pinQueue = new PQueue({ concurrency: 2, timeout: this.onPinQueueTimeout })
+    this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
     this.onQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
     this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
-    this.provideQueue = new PQueue({ concurrency: 2, timeout: this.onProvideQueueTimeout })
+    this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
 
@@ -109,7 +109,8 @@ class PinRPC {
 
     // Add new bind
     this.renewSubscriptionConnections = this.renewSubscriptionConnections.bind(this)
-    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 60000)
+    this.renewSubscriptionTimeout = 60000
+    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
   }
 
   async start () {
@@ -508,7 +509,6 @@ class PinRPC {
           diskSize
         })
       }
-      console.log(this.subscriptionList)
 
       return true
     } catch (error) {
@@ -553,6 +553,7 @@ class PinRPC {
     }
   }
 
+  // Renew subscription connection
   async renewSubscriptionConnections () {
     try {
       clearInterval(this.reconnectSubsListInterval)
@@ -563,7 +564,7 @@ class PinRPC {
             try {
               await this.node.connect(addr)
               this.log(`Successfully connected to peer : ${addr}`)
-              // break // Exit the inner loop once connection is successful
+              break // Exit the inner loop once connection is successful
             } catch (dialError) {
               this.log(`Failed to connect to ${addr}: ${dialError.message}`)
               continue // Try next address if available
@@ -574,10 +575,10 @@ class PinRPC {
           continue // Continue with next subscription
         }
       }
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
       return true
     } catch (error) {
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
       this.log('Error in PinRPC/renewSubscriptionConnections()', error)
       return false
     }
