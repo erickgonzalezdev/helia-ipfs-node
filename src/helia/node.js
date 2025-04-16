@@ -106,6 +106,7 @@ class HeliaNode {
     this.getFullNetworkOpts = this.getFullNetworkOpts.bind(this)
     this.handleDHT = this.handleDHT.bind(this)
     this.handleRelay = this.handleRelay.bind(this)
+    this.disconnect = this.disconnect.bind(this)
     this.log = inputOptions.log || console.log
   }
 
@@ -376,6 +377,18 @@ class HeliaNode {
       throw err
     }
   }
+    // Dial to multiAddress
+    async disconnect (addr) {
+      try {
+        if (!addr) { throw new Error('addr is required!') }
+        // Connect to the P2WDB Pinning service used by pearson-api.
+        await this.helia.libp2p.hangUp(multiaddr(addr))
+        return true
+      } catch (err) {
+        this.log('Error helia disconnect()  ', err)
+        throw err
+      }
+    }
 
   // Dial to multiAddress
   async connectMultiaddr (multiaddr) {

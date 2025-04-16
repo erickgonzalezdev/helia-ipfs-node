@@ -39,7 +39,7 @@ import PQueue from 'p-queue'
 import { sleep } from '../util/util.js'
 
 class PinRPC {
-  constructor (config = {}) {
+  constructor(config = {}) {
     this.allowProvideRequest = config.allowProvideRequest || false
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on pinRPC constructor')
@@ -90,6 +90,7 @@ class PinRPC {
     this.handleUnpin = this.handleUnpin.bind(this)
     this.handleProvide = this.handleProvide.bind(this)
     this.addToProvideQueue = this.addToProvideQueue.bind(this)
+    this.renewSubscriptionConnectionsTime = 1000 * 60 * 10 // 10 minutes
 
     // state
     this.subscriptionList = []
@@ -99,7 +100,7 @@ class PinRPC {
     // node disk stats
     this.diskStats = {
       size: 0, // mb
-      timeStamp: new Date().getTime() // last disk update
+      timeStamp: new Date().getTime() // last disk update 
     }
 
     // Bind the new cleanup function
@@ -110,10 +111,10 @@ class PinRPC {
 
     // Add new bind
     this.renewSubscriptionConnections = this.renewSubscriptionConnections.bind(this)
-    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 60000)
+    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionConnectionsTime)
   }
 
-  async start () {
+  async start() {
     try {
       this.node.helia.libp2p.services.pubsub.subscribe(this.pinTopic)
       this.log(`Subcribed to : ${this.pinTopic}`)
@@ -146,7 +147,7 @@ class PinRPC {
     }
   }
 
-  requestRemotePin (inObj = {}) {
+  requestRemotePin(inObj = {}) {
     try {
       const { cid, toPeerId, fromPeerId } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -167,7 +168,7 @@ class PinRPC {
     }
   }
 
-  requestRemoteUnpin (inObj = {}) {
+  requestRemoteUnpin(inObj = {}) {
     try {
       const { cid, toPeerId, fromPeerId } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -188,7 +189,7 @@ class PinRPC {
     }
   }
 
-  requestRemoteProvide (inObj = {}) {
+  requestRemoteProvide(inObj = {}) {
     try {
       const { cid, toPeerId, fromPeerId } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -209,7 +210,7 @@ class PinRPC {
     }
   }
 
-  listen () {
+  listen() {
     try {
       this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
     } catch (error) {
@@ -218,7 +219,7 @@ class PinRPC {
     }
   }
 
-  handlePubsubMsg (message = {}) {
+  handlePubsubMsg(message = {}) {
     try {
       if (message && message.detail) {
         if (message.detail.topic === this.pinTopic) {
@@ -239,7 +240,7 @@ class PinRPC {
     }
   }
 
-  async parsePinMsgProtocol (message = {}) {
+  async parsePinMsgProtocol(message = {}) {
     try {
       if (message.detail.topic !== this.pinTopic) return 'invalid topic'
       const msgStr = new TextDecoder().decode(message.detail.data)
@@ -294,7 +295,7 @@ class PinRPC {
     }
   }
 
-  async parseStateMsgProtocol (message = {}) {
+  async parseStateMsgProtocol(message = {}) {
     try {
       if (message.detail.topic !== this.stateTopic) return 'invalid topic'
       const msgStr = new TextDecoder().decode(message.detail.data)
@@ -313,7 +314,7 @@ class PinRPC {
     }
   }
 
-  addToQueue (inObj = {}) {
+  addToQueue(inObj = {}) {
     try {
       const alreadyInQueue = this.onQueue.find((val) => val.cid === inObj.cid)
       if (alreadyInQueue) {
@@ -333,7 +334,7 @@ class PinRPC {
     }
   }
 
-  addToProvideQueue (inObj = {}) {
+  addToProvideQueue(inObj = {}) {
     try {
       if (!this.allowProvideRequest) {
         this.log('Provide request is not allowed')
@@ -357,7 +358,7 @@ class PinRPC {
     }
   }
 
-  async handlePin (inObj = {}) {
+  async handlePin(inObj = {}) {
     try {
       const { fromPeerId, cid } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -391,7 +392,7 @@ class PinRPC {
     }
   }
 
-  async handleUnpin (inObj = {}) {
+  async handleUnpin(inObj = {}) {
     try {
       const { fromPeerId, cid } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -420,7 +421,7 @@ class PinRPC {
     }
   }
 
-  async handleProvide (inObj = {}) {
+  async handleProvide(inObj = {}) {
     try {
       const { fromPeerId, cid } = inObj
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required!')
@@ -453,7 +454,7 @@ class PinRPC {
     }
   }
 
-  deleteFromQueueArray (cid) {
+  deleteFromQueueArray(cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
       const cidIndex = this.onQueue.findIndex((val) => val.cid === cid)
@@ -468,7 +469,7 @@ class PinRPC {
     }
   }
 
-  deleteFromProvideQueueArray (cid) {
+  deleteFromProvideQueueArray(cid) {
     try {
       if (!cid || typeof cid !== 'string') throw new Error('cid string is required')
       const cidIndex = this.onProvideQueue.findIndex((val) => val.cid === cid)
@@ -483,7 +484,7 @@ class PinRPC {
     }
   }
 
-  updateSubscriptionList (msg = {}) {
+  updateSubscriptionList(msg = {}) {
     try {
       const { peerId, multiAddress, timeStamp, alias, diskSize } = msg
       if (!peerId || typeof peerId !== 'string') throw new Error('peerId is required')
@@ -522,23 +523,23 @@ class PinRPC {
     }
   }
 
-  getSubscriptionList () {
+  getSubscriptionList() {
     return this.subscriptionList
   }
 
-  defaultRemotePinCallback (inObj = {}) {
+  defaultRemotePinCallback(inObj = {}) {
     this.log(`Success remote pin cid  : ${inObj.cid} on ${inObj.host} `)
   }
 
-  defaultRemoteUnpinCallback (inObj = {}) {
+  defaultRemoteUnpinCallback(inObj = {}) {
     this.log(`Success remote unpin cid  : ${inObj.cid} on ${inObj.host} `)
   }
 
-  defaultRemoteProvideCallback (inObj = {}) {
+  defaultRemoteProvideCallback(inObj = {}) {
     this.log(`Success remote provide cid  : ${inObj.cid} on ${inObj.host} `)
   }
 
-  cleanupQueues () {
+  cleanupQueues() {
     try {
       const minutesAgoObj = new Date()
       minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 3)
@@ -558,7 +559,7 @@ class PinRPC {
     }
   }
 
-  async renewSubscriptionConnections () {
+  async renewSubscriptionConnections() {
     try {
       clearInterval(this.reconnectSubsListInterval)
       for (const sub of this.subscriptionList) {
@@ -566,6 +567,7 @@ class PinRPC {
           // Try to connect to each multiaddress until one succeeds
           for (const addr of sub.multiAddress) {
             try {
+              await this.node.disconnect(addr)
               await this.node.connect(addr)
               this.log(`Successfully connected to peer : ${addr}`)
               // break // Exit the inner loop once connection is successful
@@ -579,10 +581,10 @@ class PinRPC {
           continue // Continue with next subscription
         }
       }
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionConnectionsTime)
       return true
     } catch (error) {
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, 30000)
+      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionConnectionsTime)
       this.log('Error in PinRPC/renewSubscriptionConnections()', error)
       return false
     }
