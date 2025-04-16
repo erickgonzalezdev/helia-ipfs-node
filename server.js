@@ -25,6 +25,7 @@ const onProvideQueueTimeout = process.env.PIN_QUEUE_TIMEOUT
 const relay = process.env.RELAY
 const announce = process.env.ANNOUNCE
 const serverDHTProvide = process.env.SERVER_DHT_PROVIDE
+const dht = process.env.DHT
 const maxConnections = process.env.MAX_CONNECTIONS
 const allowProvideRequest = process.env.ALLOW_PROVIDE_REQUEST
 
@@ -44,7 +45,8 @@ const start = async () => {
     relay,
     announce,
     serverDHTProvide,
-    maxConnections
+    maxConnections,
+    dht
   })
   await node.start()
 
