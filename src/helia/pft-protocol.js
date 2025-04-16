@@ -92,7 +92,7 @@ class PFTProtocol {
 
       const cidAdded = await this.node.ufs.addBytes(async function * () {
         for await (const chunk of stream.source) {
-          this.log('Received chunk')
+          console.log('Received chunk')
           // console.log('chunk', chunk.subarray())
           yield chunk.subarray()
         }
