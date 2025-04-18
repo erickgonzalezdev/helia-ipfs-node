@@ -480,7 +480,7 @@ class PinRPC {
 
   updateSubscriptionList (msg = {}) {
     try {
-      const { peerId, multiAddress, timeStamp, alias, diskSize } = msg
+      const { peerId, multiAddress, timeStamp, alias, diskSize, role, onQueue, onProvideQueue } = msg
       if (!peerId || typeof peerId !== 'string') throw new Error('peerId is required')
       if (!Array.isArray(multiAddress)) throw new Error('multiAddress must be an array of addresses')
 
@@ -496,7 +496,10 @@ class PinRPC {
           multiAddresses: multiAddress,
           sentAt: timestamp,
           sentAtStr: new Date(timeStamp).toISOString(),
-          diskSize
+          diskSize,
+          role,
+          onQueue,
+          onProvideQueue
         }
       } else {
         this.subscriptionList.push({
@@ -505,7 +508,10 @@ class PinRPC {
           multiAddresses: multiAddress,
           sentAt: timestamp,
           sentAtStr: new Date(timeStamp).toISOString(),
-          diskSize
+          diskSize,
+          role,
+          onQueue,
+          onProvideQueue
         })
       }
 
