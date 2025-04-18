@@ -7,6 +7,7 @@ class UnixFSMock {
   constructor () {
     this.cat = mockIterable
     this.stat = async () => { return { fileSize: 100, localFileSize: 100 } }
+    this.addBytes = async () => { return true }
   }
 
 /*   async cat () {

@@ -20,6 +20,7 @@ class BlockStoreMock {
 
   async put () { return true }
   async get () { return true }
+  async has () { return true }
 }
 class RoutingMock {
   constructor (config) { this.config = config }
