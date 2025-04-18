@@ -47,7 +47,7 @@ const start = async () => {
   await rpc.start()
 
   // Instantiate PFT Protocol
-  const pft = new PFTProtocol({ node, knownPeerAddress })
+  const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic })
   await pft.start()
 
   // Instantiate Garbage Collector
