@@ -194,7 +194,12 @@ class HeliaNode {
           peerInfoMapper: removePrivateAddressesMapper,
           clientMode: !this.opts.serverDHTProvide,
           queryTimeout: 20000, // 20 seconds
-          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
+          protocolPrefix: '/ipfs', // Standard prefix for IPFS DHT
+          reprovide: this.opts.serverDHTProvide
+            ? {
+                concurrency: 10
+              }
+            : false
         })
       },
       logger: disable()

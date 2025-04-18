@@ -95,6 +95,7 @@ class PinRPC {
     this.defaultRemoteUnpinCallback = this.defaultRemoteUnpinCallback.bind(this)
     this.defaultRemoteProvideCallback = this.defaultRemoteProvideCallback.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
+    this.isDelegator = this.isDelegator.bind(this)
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
@@ -240,7 +241,7 @@ class PinRPC {
       const msgStr = new TextDecoder().decode(message.detail.data)
       const msgObj = JSON.parse(msgStr)
       this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
-      const { toPeerId, cid, msgType } = msgObj
+      const { toPeerId, cid, msgType, fromPeerId } = msgObj
 
       // Validate if  this node peerId match with the property if it is a string.
       if (typeof toPeerId === 'string' && toPeerId !== this.node.peerId.toString()) return 'destination peerId does not match'
@@ -250,13 +251,13 @@ class PinRPC {
         const toMe = toPeerId.find((val) => { return val === this.node.peerId.toString() })
         if (!toMe) return 'destination peerId does not match'
       }
-      // Receive request to pin a cid
-      if (msgType === 'remote-pin') {
+      // Receive request to pin a cid from a delegator peer
+      if (msgType === 'remote-pin' && this.isDelegator(fromPeerId)) {
         this.addToQueue(msgObj)
         return true
       }
-      // Receive request to unpin a cid
-      if (msgType === 'remote-unpin') {
+      // Receive request to unpin a cid from a delegator peer
+      if (msgType === 'remote-unpin' && this.isDelegator(fromPeerId)) {
         this.handleUnpin(msgObj)
         return true
       }
@@ -271,8 +272,8 @@ class PinRPC {
         return true
       }
 
-      // Receive request to provide a cid
-      if (msgType === 'remote-provide') {
+      // Receive request to provide a cid from a delegator peer
+      if (msgType === 'remote-provide' && this.isDelegator(fromPeerId)) {
         this.addToProvideQueue(msgObj)
         return true
       }
@@ -571,6 +572,18 @@ class PinRPC {
       return true
     } catch (error) {
       this.log('Error in PinRPC/topicHandler()', error)
+      return false
+    }
+  }
+
+  isDelegator (peerId) {
+    try {
+      if (!peerId || typeof peerId !== 'string') throw new Error('peerId string is required!')
+
+      const peer = this.subscriptionList.find(sub => sub.peerId === peerId)
+      return peer?.role === 'delegator'
+    } catch (error) {
+      this.log('Error in PinRPC/isDelegator()', error)
       return false
     }
   }

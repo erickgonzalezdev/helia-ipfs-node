@@ -36,6 +36,13 @@ describe('#pinRPC.js', () => {
     uut.provideQueue = new PQueueMock()
   })
 
+  beforeEach(() => {
+    uut.subscriptionList = [{
+      peerId: 'peerId',
+      multiAddress: [],
+      role: 'delegator'
+    }]
+  })
   afterEach(() => {
     sandbox.restore()
   })
@@ -564,6 +571,11 @@ describe('#pinRPC.js', () => {
     it('should handle pass validation if toPeerId string match with node peer id', async () => {
       try {
         uut.node.peerId = 'node peer id'
+        uut.subscriptionList = [{
+          peerId: 'peerId',
+          multiAddress: [],
+          role: 'delegator'
+        }]
         const msgData = {
           msgType: 'remote-pin',
           toPeerId: uut.node.peerId,
@@ -849,6 +861,96 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       } catch (err) {
         assert.include(err.message, 'Test Error')
+      }
+    })
+    it('should return return error msg if fromPeerId is not a delegator on remote-pin', async () => {
+      try {
+        uut.node.peerId = 'node peer id 2'
+        uut.subscriptionList = [{
+          peerId: 'peerId',
+          multiAddress: [],
+          role: 'node'
+        }]
+
+        const spy = sandbox.spy(uut, 'addToQueue')
+        const msgData = {
+          msgType: 'remote-pin',
+          toPeerId: uut.node.peerId,
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+        const message = {
+          detail: {
+            topic: uut.pinTopic,
+            data: new TextEncoder().encode(JSON.stringify(msgData))
+          }
+        }
+        const result = await uut.parsePinMsgProtocol(message)
+        assert.isString(result)
+        assert.include(result, 'invalid protocol')
+        assert.equal(spy.callCount, 0)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should return return error msg if fromPeerId is not a delegator on remote-provide', async () => {
+      try {
+        uut.node.peerId = 'node peer id 2'
+        uut.subscriptionList = [{
+          peerId: 'peerId',
+          multiAddress: [],
+          role: 'node'
+        }]
+
+        const spy = sandbox.spy(uut, 'addToProvideQueue')
+        const msgData = {
+          msgType: 'remote-provide',
+          toPeerId: uut.node.peerId,
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+        const message = {
+          detail: {
+            topic: uut.pinTopic,
+            data: new TextEncoder().encode(JSON.stringify(msgData))
+          }
+        }
+        const result = await uut.parsePinMsgProtocol(message)
+        assert.isString(result)
+        assert.include(result, 'invalid protocol')
+        assert.equal(spy.callCount, 0)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should return return error msg if fromPeerId is not a delegator on remote-unpin', async () => {
+      try {
+        uut.node.peerId = 'node peer id 2'
+        uut.subscriptionList = [{
+          peerId: 'peerId',
+          multiAddress: [],
+          role: 'node'
+        }]
+
+        const spy = sandbox.spy(uut, 'handleUnpin')
+        const msgData = {
+          msgType: 'remote-unpin',
+          toPeerId: uut.node.peerId,
+          fromPeerId: 'peerId',
+          cid: 'content id'
+        }
+        const message = {
+          detail: {
+            topic: uut.pinTopic,
+            data: new TextEncoder().encode(JSON.stringify(msgData))
+          }
+        }
+        const result = await uut.parsePinMsgProtocol(message)
+        assert.isString(result)
+        assert.include(result, 'invalid protocol')
+        assert.equal(spy.callCount, 0)
+      } catch (err) {
+        assert.fail('Unexpected code path')
       }
     })
   })
@@ -1150,6 +1252,30 @@ describe('#pinRPC.js', () => {
       } catch (err) {
         assert.fail('Unexpected code path')
       }
+    })
+  })
+  describe('isDelegator', () => {
+    it('should return true if peerId is a delegator', async () => {
+      uut.subscriptionList = [{
+        peerId: 'peerId',
+        multiAddress: [],
+        role: 'delegator'
+      }]
+      const result = uut.isDelegator('peerId')
+      assert.isTrue(result)
+    })
+    it('should return false if peerId is not a delegator', async () => {
+      uut.subscriptionList = [{
+        peerId: 'peerId',
+        multiAddress: [],
+        role: 'node'
+      }]
+      const result = uut.isDelegator('peerId')
+      assert.isFalse(result)
+    })
+    it('should return false on error', async () => {
+      const result = uut.isDelegator()
+      assert.isFalse(result)
     })
   })
 })

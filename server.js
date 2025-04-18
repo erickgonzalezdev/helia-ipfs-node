@@ -53,12 +53,6 @@ const start = async () => {
   // Instantiate Garbage Collector
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
-
-  setTimeout(async () => {
-    console.log('Stopping node')
-    await node.helia.stop()
-    await node.helia.start()
-  }, 70000)
 }
 
 start()

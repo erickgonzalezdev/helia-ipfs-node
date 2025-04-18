@@ -43,7 +43,7 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
-    it('should start helia node full nwtworking', async () => {
+    it('should start helia node ', async () => {
       try {
         sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
         sandbox.stub(uut, 'saveKey').resolves(true)
@@ -53,7 +53,7 @@ describe('#Helia.js', () => {
         assert.fail('Unexpected result')
       }
     })
-    it('should start helia node full nwtworking and announce mode', async () => {
+    it('should start helia node on announce mode', async () => {
       try {
         uut.opts.announce = true
         sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
@@ -70,8 +70,9 @@ describe('#Helia.js', () => {
         sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
         sandbox.stub(uut, 'saveKey').resolves(true)
         sandbox.stub(uut, 'readKey').throws(new Error())
+        uut.opts.nodeKey = '6259bf2c92c772162efdc63af1c2d1eb'
 
-        await uut.start({ nodeKey: '6259bf2c92c772162efdc63af1c2d1eb' })
+        await uut.start()
       } catch (err) {
         assert.fail('Unexpected result')
       }
@@ -84,6 +85,19 @@ describe('#Helia.js', () => {
         sandbox.stub(uut.fs, 'existsSync').resolves(true)
         sandbox.stub(uut.fs.promises, 'rm').resolves(true)
 
+        await uut.start()
+      } catch (err) {
+        assert.fail('Unexpected result')
+      }
+    })
+    it('should start with dht provider/reprovider', async () => {
+      try {
+        sandbox.stub(uut, 'publicIp').resolves('127.0.0.1')
+        sandbox.stub(uut, 'saveKey').resolves(true)
+        sandbox.stub(uut, 'readKey').throws(new Error())
+        sandbox.stub(uut.fs, 'existsSync').resolves(true)
+        sandbox.stub(uut.fs.promises, 'rm').resolves(true)
+        uut.opts.serverDHTProvide = true
         await uut.start({ nodeKey: '6259bf2c92c772162efdc63af1c2d1eb' })
       } catch (err) {
         assert.fail('Unexpected result')
