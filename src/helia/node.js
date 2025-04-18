@@ -16,20 +16,17 @@ import { bootstrap } from '@libp2p/bootstrap'
 
 import { bootstrapConfig } from '../util/bootstrap.js'
 
-import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2'
-import { webRTCDirect } from '@libp2p/webrtc'
-// import {  webRTC } from '@libp2p/webrtc'
+import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 
 import { webSockets } from '@libp2p/websockets'
 
 // import { autoNAT } from '@libp2p/autonat'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
-import { uPnPNAT } from '@libp2p/upnp-nat'
-import { autoNAT } from '@libp2p/autonat'
+// import { uPnPNAT } from '@libp2p/upnp-nat'
+// import { autoNAT } from '@libp2p/autonat'
 
 // import { mdns } from '@libp2p/mdns'
-import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
-import { create as createIpfsHttpClient } from 'kubo-rpc-client'
+// import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
 import { CID } from 'multiformats/cid'
 import crypto from 'crypto'
 import { identify } from '@libp2p/identify'
@@ -43,18 +40,8 @@ import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
-import PFTProtocol from './pft-protocol.js'
-
-// default is to use ipfs.io
-const client = createIpfsHttpClient({
-  // use default api settings
-  protocol: 'https',
-  port: 443,
-  host: 'node0.delegate.ipfs.io'
-})
-
 class HeliaNode {
-  constructor(inputOptions = {}) {
+  constructor (inputOptions = {}) {
     this.multiaddr = multiaddr
     this.publicIp = publicIpv4
     this.createHelia = createHelia
@@ -83,6 +70,7 @@ class HeliaNode {
     this.connectMultiaddr = this.connectMultiaddr.bind(this)
     this.upload = this.upload.bind(this)
     this.uploadDir = this.uploadDir.bind(this)
+    this.pftpDownload = this.pftpDownload.bind(this)
 
     // this.uploadObject = this.uploadObject.bind(this)
     // this.uploadString = this.uploadString.bind(this)
@@ -104,26 +92,27 @@ class HeliaNode {
     this.provideCID = this.provideCID.bind(this)
     this.downloading = {}
     this.sleep = sleep
-    this.getMinimalNetworkOpts = this.getMinimalNetworkOpts.bind(this)
-    this.getFullNetworkOpts = this.getFullNetworkOpts.bind(this)
+    this.getLibp2pOpts = this.getLibp2pOpts.bind(this)
     this.log = inputOptions.log || console.log
+    this.parseOptions = this.parseOptions.bind(this)
+    this.handleRelay = this.handleRelay.bind(this)
+    this.getConnections = this.getConnections.bind(this)
+    this.cleanDownloading = this.cleanDownloading.bind(this)
   }
 
   // Parse injected options
-  async parseOptions() {
+  async parseOptions () {
     const defaultOptions = {
       storePath: this.opts.storePath || this.path.resolve('./helia-data'),
       nodeKey: this.opts.nodeKey || this.generateSalt(),
       tcpPort: this.opts.tcpPort || 4001,
       wsPort: this.opts.wsPort || 4002,
-      announceAddresses: this.opts.announceAddresses || [],
       bootstrapList: this.opts.bootstrapList || bootstrapConfig,
       alias: this.opts.alias,
-      networking: this.opts.networking || 'minimal', // 'full',
       relay: this.opts.relay,
       announce: this.opts.announce,
-      serverDHTProvide: this.opts.serverDHTProvide,
-      maxConnections: this.opts.maxConnections || 100
+      serverDHTProvide: this.opts.serverDHTProvide
+      // maxConnections: this.opts.maxConnections || 500
     }
 
     let existingKey
@@ -142,7 +131,7 @@ class HeliaNode {
     return defaultOptions
   }
 
-  handleRelay(libp2pOpts) {
+  handleRelay (libp2pOpts) {
     if (!this.opts.relay) return libp2pOpts
     libp2pOpts.services.relay = circuitRelayServer({ // makes the node function as a relay server
       hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
@@ -161,7 +150,7 @@ class HeliaNode {
     return libp2pOpts
   }
 
-  getMinimalNetworkOpts(privateKey, datastore) {
+  getLibp2pOpts (privateKey, datastore) {
     const libp2pOpts = {
       privateKey,
       datastore,
@@ -176,7 +165,7 @@ class HeliaNode {
           ? [
             `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
             `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-          ]
+            ]
           : []
       },
       transports: [
@@ -189,10 +178,6 @@ class HeliaNode {
       streamMuxers: [
         yamux()
       ],
-      connectionManager: {
-        minConnections: 10, // Minimum number of connections to maintain
-        maxConnections: this.opts.maxConnections // Maximum number of connections to allow
-      },
       peerDiscovery: [
         // mdns(),
         bootstrap(bootstrapConfig)
@@ -218,76 +203,7 @@ class HeliaNode {
     return this.handleRelay(libp2pOpts)
   }
 
-  getFullNetworkOpts(privateKey, datastore) {
-    const libp2pOpts = {
-      privateKey,
-      datastore,
-      addresses: {
-        listen: [
-          '/ip4/0.0.0.0/tcp/0',
-          `/ip4/0.0.0.0/tcp/${this.opts.tcpPort}`,
-          `/ip4/0.0.0.0/tcp/${this.opts.wsPort}/ws`,
-          '/webrtc'
-        ]
-      },
-      announce: this.opts.announce
-        ? [
-          `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-          `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-        ]
-        : [],
-      transports: [
-        tcp({ logger: logger('upgrade') }),
-        circuitRelayTransport({
-          discoverRelays: 2
-        }),
-        webRTCDirect(),
-        webSockets()
-      ],
-      connectionEncrypters: [
-        noise()
-      ],
-      streamMuxers: [
-        yamux()
-      ],
-      connectionManager: {
-        minConnections: 10, // Minimum number of connections to maintain
-        maxConnections: this.opts.maxConnections // Maximum number of connections to allow
-      },
-      peerDiscovery: [
-        // mdns() ,
-        bootstrap(bootstrapConfig)
-
-      ],
-      peerRouting: [
-        delegatedContentRouting(client)
-      ],
-      services: {
-        identify: identify(),
-        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
-
-        dht: kadDHT({
-          protocol: '/ipfs/kad/1.0.0',
-          peerInfoMapper: removePrivateAddressesMapper,
-          clientMode: !this.opts.serverDHTProvide,
-          queryTimeout: 20000, // 20 seconds
-          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
-
-        }),
-        autoNAT: autoNAT(),
-        nat: uPnPNAT({
-          description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
-          ttl: 7200, // TTL for port mappings (min 20 minutes)
-          keepAlive: true // Refresh port mapping after TTL expires
-        })
-        /*     */
-      },
-      logger: disable()
-    }
-    return this.handleRelay(libp2pOpts)
-  }
-
-  async start() {
+  async start () {
     try {
       const options = await this.parseOptions()
       this.log('Starting Helia IPFS Node')
@@ -310,15 +226,13 @@ class HeliaNode {
 
       this.ip4 = await this.publicIp()
 
-      let libp2pInputs = this.getMinimalNetworkOpts(keyPair, datastore)
-      if (this.opts.networking === 'full') {
-        libp2pInputs = this.getFullNetworkOpts(keyPair, datastore)
-      }
+      const libp2pInputs = this.getLibp2pOpts(keyPair, datastore)
+
+      this.log(`Node Alias : ${this.opts.alias}`)
       this.log(`RELAY : ${!!this.opts.relay}`)
       this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
-      this.log(`Instantiating with ${this.opts.networking} networking`)
-      this.log('Bootstrap List', options.bootstrapList)
-      this.log('Max connections ', this.opts.maxConnections)
+      this.log(`Announce Public Addresses: ${!!this.opts.announce}`)
+
       const libp2p = await this.createLibp2p(libp2pInputs)
 
       this.peerId = peerId
@@ -329,14 +243,6 @@ class HeliaNode {
         libp2p
       })
 
-      /*       // Attempt to guess our ip4 IP address.
-            const ip4 = await this.publicIp()
-            this.ip4 = ip4
-
-            let detectedMultiaddr = `/ip4/${ip4}/tcp/${options.tcpPort}/p2p/${this.peerId}`
-            detectedMultiaddr = this.multiaddr(detectedMultiaddr) */
-
-      // Get the multiaddrs for the node.
       const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
 
@@ -344,10 +250,6 @@ class HeliaNode {
 
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)
 
-      this.log(`Node Alias : ${this.opts.alias}`)
-
-      this.pftp = new PFTProtocol({ node: this })
-      this.pftp.start()
       return this.helia
     } catch (error) {
       this.log('error in helia/start()', error)
@@ -356,20 +258,20 @@ class HeliaNode {
   }
 
   // Dial to multiAddress
-  async connect(addr) {
+  async connect (addr) {
     try {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
       const conection = await this.helia.libp2p.dial(multiaddr(addr))
       return conection
     } catch (err) {
-      this.log('Error helia connect()  ', err)
+      this.log('Error helia connect()  ', err.message)
       throw err
     }
   }
 
   // Dial to multiAddress
-  async connectMultiaddr(multiaddr) {
+  async connectMultiaddr (multiaddr) {
     try {
       if (!multiaddr) { throw new Error('multiaddr is required!') }
       // Connect to the P2WDB Pinning service used by pearson-api.
@@ -382,7 +284,7 @@ class HeliaNode {
   }
 
   // Upload content to the node
-  async upload(path) {
+  async upload (path) {
     try {
       if (!path) { throw new Error('path is required!') }
 
@@ -411,7 +313,7 @@ class HeliaNode {
   }
 
   // Upload file to the node
-  async uploadFile(path) {
+  async uploadFile (path) {
     try {
       if (!path) { throw new Error('path is required!') }
       if (!this.fs.existsSync(path)) { throw new Error('File not found!') }
@@ -427,7 +329,7 @@ class HeliaNode {
   }
 
   // Upload dir to the node
-  async uploadDir(dir) {
+  async uploadDir (dir) {
     try {
       if (!dir) { throw new Error('Dir is required!') }
       if (!this.fs.existsSync(path)) { throw new Error('Dir not found!') }
@@ -453,27 +355,8 @@ class HeliaNode {
     }
   }
 
-  /*   // Upload object with dir wrapper
-  async uploadObject(obj, objName = 'data.json') {
-    try {
-      if (!obj) { throw new Error('obj is required!') }
-
-      const encoder = new TextEncoder()
-      const cid = await this.ufs.addBytes(encoder.encode(JSON.stringify(obj)), this.helia.blockstore)
-      let rootCid = await this.ufs.addDirectory()
-
-      this.log('rootCid', rootCid)
-      rootCid = await this.ufs.cp(cid, rootCid, objName)
-
-      return rootCid
-    } catch (error) {
-      this.log('Error trying to connect to pinning service: ', error)
-      throw error
-    }
-  } */
-
   // Upload object with dir wrapper
-  async uploadStrOrObj(value) {
+  async uploadStrOrObj (value) {
     try {
       if (!value) { throw new Error('object or string is required!') }
       if (typeof value !== 'string' && typeof value !== 'object') {
@@ -496,63 +379,19 @@ class HeliaNode {
     }
   }
 
-  /*   // Upload string to the node
-  async uploadString(str) {
-    try {
-      if (!str) { throw new Error('str is required!') }
-
-      const encoder = new TextEncoder()
-      const cid = await this.ufs.addBytes(encoder.encode(str), this.helia.blockstore)
-
-      return cid
-    } catch (error) {
-      this.log('Error trying to connect to pinning service: ', error)
-      throw error
-    }
-  } */
-
-  /*   // List provider for a CID
-  async listProviders(cid) {
-    try {
-      for await (const provider of this.helia.libp2p.contentRouting.findProviders(CID.parse(cid))) {
-        this.log(`Provider for ${cid}`, provider)
-      }
-    } catch (error) {
-      this.log('Error trying to connect to pinning service: ', error)
-      throw error
-    }
-  }
- */
-  generateSalt(phrase) {
+  generateSalt (phrase) {
     return crypto.randomBytes(16).toString('hex')
   }
 
   // Get all connected nodes
-  getConnections() {
+  getConnections () {
     const cs = this.helia.libp2p.getConnections()
     return cs
   }
 
-  /*   // Renew boostrap connections
-  async renewBootstrap() {
-    const list = this.opts.bootstrapList.list
-    if (!list) return
-    for (let i = 0; i < list.length; i++) {
-      try {
-        this.log(`Try to connect to ${list[i]}`)
-
-        await this.connect(list[i])
-        this.log(`Connected to ${list[i]}`)
-      } catch (error) {
-        this.log(`Cannot connect to ${list[i]}`)
-      }
-    }
-  } */
-
   // Get content from CID
-  async getContent(CID, options = {}) {
+  async getContent (CID, options = {}) {
     try {
-
       if (!CID || typeof CID !== 'string') {
         throw new Error('CID string is required.')
       }
@@ -569,7 +408,7 @@ class HeliaNode {
     }
   }
 
-  async lazyDownload(cid, length, signal) {
+  async lazyDownload (cid, length, signal) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -619,7 +458,7 @@ class HeliaNode {
     }
   }
 
-  async getStat(cid, options = {}) {
+  async getStat (cid, options = {}) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -634,7 +473,7 @@ class HeliaNode {
   }
 
   // Get node multi addresses
-  async getMultiAddress() {
+  async getMultiAddress () {
     try {
       // Attempt to guess our ip4 IP address.
       const multiaddrs = this.helia.libp2p.getMultiaddrs()
@@ -659,7 +498,7 @@ class HeliaNode {
   }
 
   // Pin a CID
-  async pinCid(cid) {
+  async pinCid (cid) {
     if (!cid) {
       throw new Error('CID is required.')
     }
@@ -680,7 +519,7 @@ class HeliaNode {
   }
 
   // UN-pin a CID
-  async unPinCid(cid) {
+  async unPinCid (cid) {
     if (!cid) {
       throw new Error('CID is required.')
     }
@@ -697,7 +536,7 @@ class HeliaNode {
   }
 
   // Get all pins list.
-  async getPins() {
+  async getPins () {
     return new this.Promise(async (resolves, reject) => {
       try {
         const pins = []
@@ -713,7 +552,7 @@ class HeliaNode {
     })
   }
 
-  saveKey(key, path) {
+  saveKey (key, path) {
     // this.log('fs1', this.fs)
     return new this.Promise((resolve, reject) => {
       try {
@@ -738,7 +577,7 @@ class HeliaNode {
     })
   }
 
-  readKey(path) {
+  readKey (path) {
     return new Promise((resolve, reject) => {
       try {
         if (!path || typeof path !== 'string') {
@@ -758,7 +597,7 @@ class HeliaNode {
     })
   }
 
-  async getDiskSize() {
+  async getDiskSize () {
     try {
       const size = await this.getFolderSize.strict(this.opts.storePath)
       const mbSize = (size / 1000 / 1000).toFixed(2)
@@ -770,7 +609,7 @@ class HeliaNode {
     }
   }
 
-  async provideCID(cid, options) {
+  async provideCID (cid, options) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
@@ -784,7 +623,7 @@ class HeliaNode {
     }
   }
 
-  cleanDownloading() {
+  cleanDownloading () {
     try {
       const minutesAgoObj = new Date()
       minutesAgoObj.setMinutes(minutesAgoObj.getMinutes() - 2)
@@ -802,6 +641,12 @@ class HeliaNode {
       this.log('Error in cleanDownloading(): ', error)
       return false
     }
+  }
+
+  // A function prototype to download a cid using the pftp protocol.
+  // this function will be replaced if u provide this node to the pftp protocol.
+  async pftpDownload (cid) {
+    return false
   }
 }
 

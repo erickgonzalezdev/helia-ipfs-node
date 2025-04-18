@@ -19,7 +19,7 @@ export default class Gateway {
     try {
       const { cid } = ctx.params
       // try to download the cid on the private nerwork first
-      await this.node.pftp.downloadCid(cid)
+      await this.node.pftpDownload(cid)
 
       let cidToFetch = cid
       // Verify if the cid is a folder

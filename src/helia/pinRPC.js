@@ -51,6 +51,7 @@ class PinRPC {
 
     this.node = config.node
     this.topic = config.topic
+    this.role = config.role || 'node' // 'node' 'pinner' 'delegator'
     this.pinTopic = `${this.topic}-pin`
     this.stateTopic = `${this.topic}-state`
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
@@ -59,12 +60,12 @@ class PinRPC {
 
     this.log = this.node.log || console.log
 
-    this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 5 // 5 minutes default
+    this.onPinQueueTimeout = Number(config.onPinQueueTimeout) || 60000 * 2 // 2 minutes default
     this.pinQueue = new PQueue({ concurrency: 1, timeout: this.onPinQueueTimeout })
     this.onQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on pin queue ${this.pinQueue.timeout}`)
 
-    this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 5 // 5 minutes default
+    this.onProvideQueueTimeout = Number(config.onProvideQueueTimeout) || 60000 * 3 // 3 minutes default
     this.provideQueue = new PQueue({ concurrency: 1, timeout: this.onProvideQueueTimeout })
     this.onProvideQueue = [] // Will now store objects with {cid, timestamp}
     this.log(`Timeout on provide queue ${this.provideQueue.timeout}`)
@@ -89,32 +90,23 @@ class PinRPC {
     this.handleUnpin = this.handleUnpin.bind(this)
     this.handleProvide = this.handleProvide.bind(this)
     this.addToProvideQueue = this.addToProvideQueue.bind(this)
+    this.cleanupQueues = this.cleanupQueues.bind(this)
+    this.updateSubscriptionList = this.updateSubscriptionList.bind(this)
+    this.defaultRemoteUnpinCallback = this.defaultRemoteUnpinCallback.bind(this)
+    this.defaultRemoteProvideCallback = this.defaultRemoteProvideCallback.bind(this)
 
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
     this.notificationTimer = 30000
 
-    // node disk stats
-    this.diskStats = {
-      size: 0, // mb
-      timeStamp: new Date().getTime() // last disk update
-    }
-
-    // Bind the new cleanup function
-    this.cleanupQueues = this.cleanupQueues.bind(this)
-
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
-
-    // Add new bind
-    this.renewSubscriptionConnections = this.renewSubscriptionConnections.bind(this)
-    this.renewSubscriptionTimeout = 60000
-    this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
   }
 
   async start () {
     try {
+      this.log(`RPC Role : ${this.role}`)
       this.node.helia.libp2p.services.pubsub.subscribe(this.pinTopic)
       this.log(`Subcribed to : ${this.pinTopic}`)
 
@@ -132,8 +124,9 @@ class PinRPC {
           peerId: this.node.peerId,
           multiAddress: this.node.addresses,
           alias: this.node.opts.alias,
+          role: this.role,
           onQueue: this.onQueue.length,
-          stats: this.diskStats,
+          onProvideQueue: this.onProvideQueue.length,
           diskSize
         }
         const msgStr = JSON.stringify(msg)
@@ -362,8 +355,13 @@ class PinRPC {
       try {
         this.log(`Trying to download and pin cid ${cid} on queue`)
         // const signal = AbortSignal.timeout(this.pinQueue.timeout)
-        const downloaded = await this.node.pftp.downloadCid(cid) // Download CID
-        if (!downloaded) throw new Error('Failed to download cid')
+
+        // Try to download the cid from the private file transfer protocol
+        const downloaded = await this.node.pftpDownload(cid) // Download CID
+        if (!downloaded) {
+          // If the cid is not downloaded, try to download it from the network using lazy download
+          await this.node.lazyDownload(cid)
+        }
         await this.node.pinCid(cid) // pin CID
       } catch (error) {
         this.log(`Error Trying to download and pin cid ${cid}`)
@@ -510,9 +508,6 @@ class PinRPC {
           diskSize
         })
       }
-      if (multiAddress[0]) {
-        this.node.pftp.addKnownPeer(multiAddress[0])
-      }
 
       return true
     } catch (error) {
@@ -549,41 +544,10 @@ class PinRPC {
       // Clean onProvideQueue
       this.onProvideQueue = this.onProvideQueue.filter(item => item.timestamp > minutesAgo)
 
-      console.log(`Cleaned queues. onQueue: ${this.onQueue.length}, onProvideQueue: ${this.onProvideQueue.length}`)
+      this.log(`Cleaned queues. onQueue: ${this.onQueue.length}, onProvideQueue: ${this.onProvideQueue.length}`)
       return true
     } catch (error) {
       this.log('Error in PinRPC/cleanupQueues()', error)
-      return false
-    }
-  }
-
-  // Renew subscription connection
-  async renewSubscriptionConnections () {
-    try {
-      clearInterval(this.reconnectSubsListInterval)
-      for (const sub of this.subscriptionList) {
-        try {
-          // Try to connect to each multiaddress until one succeeds
-          for (const addr of sub.multiAddresses) {
-            try {
-              await this.node.connect(addr)
-              this.log(`Successfully connected to peer : ${addr}`)
-              break // Exit the inner loop once connection is successful
-            } catch (dialError) {
-              this.log(`Failed to connect to ${addr}: ${dialError.message}`)
-              continue // Try next address if available
-            }
-          }
-        } catch (peerError) {
-          this.log(`Error connecting to peer ${sub.peerId}: ${peerError.message}`)
-          continue // Continue with next subscription
-        }
-      }
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
-      return true
-    } catch (error) {
-      this.reconnectSubsListInterval = setInterval(this.renewSubscriptionConnections, this.renewSubscriptionTimeout)
-      this.log('Error in PinRPC/renewSubscriptionConnections()', error)
       return false
     }
   }

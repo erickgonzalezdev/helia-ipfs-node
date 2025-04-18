@@ -1,5 +1,10 @@
 /**
  * Garbage collection
+ *
+ * This class is used to collect garbage from the node every period of time.
+ * It is used to clean the node from unpinned cid and free up space.
+ *
+ *
  */
 
 export default class GarbageCollector {
@@ -21,6 +26,7 @@ export default class GarbageCollector {
       throw new Error('Provided period must be a number to specify the minutes on interval ')
     }
 
+    this.start = this.start.bind(this)
     this.garbageCollection = this.garbageCollection.bind(this)
   }
 
