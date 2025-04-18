@@ -130,6 +130,25 @@ describe('#Helia.js', () => {
       }
     })
   })
+  describe('#tryDisconnect', () => {
+    it('should disconnect from provided address', async () => {
+      sandbox.stub(uut.helia.libp2p, 'hangUp').resolves(true)
+
+      const result = await uut.tryDisconnect('/ip4/127.0.0.1/tcp/40651/p2p/12D3KooWDiNi4HBbjK5eeCKKD9xoqtueHGgB2WQd83zNjwtgWRhX')
+      assert.isTrue(result)
+    })
+    it('should return false if disconnect fails', async () => {
+      sandbox.stub(uut.helia.libp2p, 'hangUp').throws(new Error('Test Error'))
+      const result = await uut.tryDisconnect('/ip4/127.0.0.1/tcp/40651/p2p/12D3KooWDiNi4HBbjK5eeCKKD9xoqtueHGgB2WQd83zNjwtgWRhX')
+
+      assert.isFalse(result)
+    })
+    it('should return false if address is not provided', async () => {
+      const result = await uut.tryDisconnect()
+
+      assert.isFalse(result)
+    })
+  })
   describe('#connectMultiaddr', () => {
     it('should connect and dial to provided multiaddr', async () => {
       try {

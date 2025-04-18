@@ -94,7 +94,7 @@ class PinRPC {
     this.updateSubscriptionList = this.updateSubscriptionList.bind(this)
     this.defaultRemoteUnpinCallback = this.defaultRemoteUnpinCallback.bind(this)
     this.defaultRemoteProvideCallback = this.defaultRemoteProvideCallback.bind(this)
-
+    this.topicHandler = this.topicHandler.bind(this)
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
@@ -107,16 +107,18 @@ class PinRPC {
   async start () {
     try {
       this.log(`RPC Role : ${this.role}`)
-      this.node.helia.libp2p.services.pubsub.subscribe(this.pinTopic)
-      this.log(`Subcribed to : ${this.pinTopic}`)
-
-      this.node.helia.libp2p.services.pubsub.subscribe(this.stateTopic)
-      this.log(`Subcribed to : ${this.stateTopic}`)
+      this.topicHandler(this.pinTopic)
+      this.topicHandler(this.stateTopic)
 
       this.listen()
 
       // Send notification message above the state topic
       this.nofitySubscriptionInterval = setInterval(async () => {
+        const topics = this.node.helia.libp2p.services.pubsub.getTopics()
+        this.log('Current Topics.', topics)
+        this.topicHandler(this.pinTopic)
+        this.topicHandler(this.stateTopic)
+
         const diskSize = await this.node.getDiskSize()
         const msg = {
           msgType: 'notify-state',
@@ -554,6 +556,21 @@ class PinRPC {
       return true
     } catch (error) {
       this.log('Error in PinRPC/cleanupQueues()', error)
+      return false
+    }
+  }
+
+  topicHandler (topic) {
+    try {
+      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(topic)
+      if (!isSubscribed) {
+        this.node.helia.libp2p.services.pubsub.subscribe(topic)
+        this.log(`Subcribed to : ${topic}`)
+        return true
+      }
+      return true
+    } catch (error) {
+      this.log('Error in PinRPC/topicHandler()', error)
       return false
     }
   }

@@ -5,6 +5,7 @@ class Pubsub {
   async subscribe () { return true }
   async publish () { return true }
   async addEventListener () { return true }
+  async getTopics () { return [] }
 }
 class ContentRoutingMock {
   constructor (config) { this.config = config }
@@ -24,6 +25,7 @@ class Libp2pMock {
   getMultiaddrs () { return [] }
   async dial () { return true }
   async dialProtocol () { return true }
+  async hangUp () { return true }
   async getConnections () { return [] }
   async handle () { return true }
 }
