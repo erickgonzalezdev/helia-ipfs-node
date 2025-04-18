@@ -261,12 +261,25 @@ class HeliaNode {
   async connect (addr) {
     try {
       if (!addr) { throw new Error('addr is required!') }
-      // Connect to the P2WDB Pinning service used by pearson-api.
+      // Connect to a node
       const conection = await this.helia.libp2p.dial(multiaddr(addr))
       return conection
     } catch (err) {
       this.log('Error helia connect()  ', err.message)
       throw err
+    }
+  }
+
+  // Dial to multiAddress
+  async tryDisconnect (addr) {
+    try {
+      if (!addr) { throw new Error('addr is required!') }
+      const conection = await this.helia.libp2p.hangUp(multiaddr(addr))
+      this.log(`Disconnection successfull from ${addr}`)
+      return conection
+    } catch (err) {
+      this.log('Error helia tryDisconnect()  ', err.message)
+      return false
     }
   }
 

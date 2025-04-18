@@ -36,6 +36,7 @@ class PFTProtocol {
     this.listenPubsub = this.listenPubsub.bind(this)
     this.renewConnections = this.renewConnections.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
+    this.topicHandler = this.topicHandler.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
@@ -57,18 +58,22 @@ class PFTProtocol {
   async start () {
     this.log(`Starting on Private file transfer protocol ( PFTP) on protocol ${this.protocol}`)
 
-    this.node.helia.libp2p.services.pubsub.subscribe(this.topic)
-    this.log(`Subcribed to : ${this.topic}`)
     // add provided known peer to address store
     this.addKnownPeer(this.knownPeerAddress)
+
+    // handle pubsub
+    this.listenPubsub()
+
+    this.topicHandler(this.topic)
 
     // handle protocol
     this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
 
     await this.renewConnections()
-    // handle pubsub
-    this.listenPubsub()
+
     this.nofitySubscriptionInterval = setInterval(async () => {
+      this.topicHandler(this.topic)
+
       const msg = {
         multiAddress: this.node.addresses[0],
         knownPeers: this.getKnownPeers()
@@ -284,6 +289,8 @@ class PFTProtocol {
         } catch (dialError) {
           this.log(`Failed to connect to ${address}: ${dialError.message}`)
           this.removeKnownPeer(address)
+          this.node.tryDisconnect(address)
+
           continue // Try next address if available
         }
       }
@@ -292,6 +299,20 @@ class PFTProtocol {
     } catch (error) {
       this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
       this.log('Error in PFTProtocol/renewConnections()', error.message)
+      return false
+    }
+  }
+
+  topicHandler (topic) {
+    try {
+      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(topic)
+      if (!isSubscribed) {
+        this.node.helia.libp2p.services.pubsub.subscribe(topic)
+        this.log(`Subcribed to : ${topic}`)
+      }
+      return true
+    } catch (error) {
+      this.log('Error in PinRPC/topicHandler()', error)
       return false
     }
   }
