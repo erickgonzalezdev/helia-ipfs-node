@@ -225,7 +225,7 @@ class PinRPC {
       return false
     } catch (error) {
       this.log('Error in pinRPC/handleMsg()', error)
-      throw error
+      return false
     }
   }
 
@@ -491,8 +491,8 @@ class PinRPC {
           alias,
           peerId,
           multiAddresses: multiAddress,
-          sentAt: timestamp,
-          sentAtStr: new Date(timeStamp).toISOString(),
+          timeStamp: timestamp,
+          timeStampStr: new Date(timeStamp).toISOString(),
           diskSize,
           role,
           onQueue,
@@ -503,8 +503,8 @@ class PinRPC {
           alias,
           peerId,
           multiAddresses: multiAddress,
-          sentAt: timestamp,
-          sentAtStr: new Date(timeStamp).toISOString(),
+          timeStamp: timestamp,
+          timeStampStr: new Date(timeStamp).toISOString(),
           diskSize,
           role,
           onQueue,
@@ -520,7 +520,27 @@ class PinRPC {
   }
 
   getSubscriptionList () {
-    return this.subscriptionList
+    const now = new Date().getTime()
+    const subsList = []
+    for (const sub of this.subscriptionList) {
+      const elapsedMs = now - sub.timeStamp
+      const elapsedSeconds = Math.floor(elapsedMs / 1000)
+
+      let since
+      if (elapsedSeconds < 60) {
+        since = `${elapsedSeconds} seconds`
+      } else if (elapsedSeconds < 3600) {
+        const minutes = Math.floor(elapsedSeconds / 60)
+        since = `${minutes} minutes`
+      } else {
+        const hours = Math.floor(elapsedSeconds / 3600)
+        since = `${hours} hours`
+      }
+
+      sub.since = since
+      subsList.push(sub)
+    }
+    return subsList
   }
 
   defaultRemotePinCallback (inObj = {}) {

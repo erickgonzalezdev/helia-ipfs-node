@@ -127,7 +127,7 @@ class PFTProtocol {
       return false
     } catch (error) {
       this.log('Error in pinRPC/handlePubsubMsg()', error)
-      throw error
+      return false
     }
   }
 

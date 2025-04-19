@@ -191,7 +191,7 @@ describe('#PFTProtocol', () => {
       const result = await uut.handlePubsubMsg({ topic: 'testtopic2', data: 'testdata' })
       assert.isFalse(result)
     })
-    it('should handle error', async () => {
+    it('should return false on error', async () => {
       try {
         uut.topic = 'testtopic'
         const msg = {
@@ -204,10 +204,10 @@ describe('#PFTProtocol', () => {
           }
         }
         sandbox.stub(uut, 'addKnownPeer').throws(new Error('test error'))
-        await uut.handlePubsubMsg(msg)
-        assert.fail('Unexpected code path')
+        const result = await uut.handlePubsubMsg(msg)
+        assert.isFalse(result)
       } catch (error) {
-        assert.include(error.message, 'test error')
+        assert.fail('Unexpected code path')
       }
     })
   })

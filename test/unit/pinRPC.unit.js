@@ -1078,7 +1078,7 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
-    it('should handle error', async () => {
+    it('should return false on error', async () => {
       try {
         sandbox.stub(uut, 'parseStateMsgProtocol').throws(new Error('test error'))
         const msgData = {}
@@ -1088,10 +1088,10 @@ describe('#pinRPC.js', () => {
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        await uut.handlePubsubMsg(message)
-        assert.fail('Unexpected code path')
+        const result = await uut.handlePubsubMsg(message)
+        assert.isFalse(result)
       } catch (err) {
-        assert.include(err.message, 'test error')
+        assert.fail('Unexpected code path')
       }
     })
     it('should handle invalid message', async () => {
@@ -1187,6 +1187,48 @@ describe('#pinRPC.js', () => {
       try {
         const result = uut.getSubscriptionList()
         assert.isArray(result)
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should return subscription list with since seconds', async () => {
+      try {
+        uut.subscriptionList = [{
+          peerId: 'myId',
+          multiAddress: [],
+          timeStamp: new Date().getTime() - 1000
+        }]
+        const result = uut.getSubscriptionList()
+        assert.isArray(result)
+        assert.equal(result[0].since, '1 seconds')
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should return subscription list with since minutes', async () => {
+      try {
+        uut.subscriptionList = [{
+          peerId: 'myId',
+          multiAddress: [],
+          timeStamp: new Date().getTime() - 60000
+        }]
+        const result = uut.getSubscriptionList()
+        assert.isArray(result)
+        assert.equal(result[0].since, '1 minutes')
+      } catch (err) {
+        assert.fail('Unexpected code path')
+      }
+    })
+    it('should return subscription list with since hours', async () => {
+      try {
+        uut.subscriptionList = [{
+          peerId: 'myId',
+          multiAddress: [],
+          timeStamp: new Date().getTime() - 3600000
+        }]
+        const result = uut.getSubscriptionList()
+        assert.isArray(result)
+        assert.equal(result[0].since, '1 hours')
       } catch (err) {
         assert.fail('Unexpected code path')
       }
