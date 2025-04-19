@@ -103,23 +103,17 @@ class PinRPC {
 
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
+    this.handleTopicSubscriptionInterval = setInterval(() => { this.topicHandler([this.pinTopic, this.stateTopic]) }, 90000)
   }
 
   async start () {
     try {
       this.log(`RPC Role : ${this.role}`)
-      this.topicHandler(this.pinTopic)
-      this.topicHandler(this.stateTopic)
 
       this.listen()
-
+      this.topicHandler([this.pinTopic, this.stateTopic])
       // Send notification message above the state topic
       this.nofitySubscriptionInterval = setInterval(async () => {
-        const topics = this.node.helia.libp2p.services.pubsub.getTopics()
-        this.log('Current Topics.', topics)
-        this.topicHandler(this.pinTopic)
-        this.topicHandler(this.stateTopic)
-
         const diskSize = await this.node.getDiskSize()
         const msg = {
           msgType: 'notify-state',
@@ -561,14 +555,16 @@ class PinRPC {
     }
   }
 
-  topicHandler (topic) {
+  topicHandler (topics = []) {
     try {
-      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(topic)
-      if (!isSubscribed) {
+      for (const topic of topics) {
+        this.node.helia.libp2p.services.pubsub.unsubscribe(topic)
         this.node.helia.libp2p.services.pubsub.subscribe(topic)
         this.log(`Subcribed to : ${topic}`)
-        return true
+        const peerListeners = this.node.helia.libp2p.services.pubsub.getPeers(topic)
+        this.log(`${topic} peerListeners`, peerListeners)
       }
+
       return true
     } catch (error) {
       this.log('Error in PinRPC/topicHandler()', error)

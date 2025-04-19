@@ -44,7 +44,7 @@ class PFTProtocol {
 
     this.notificationTimer = 20000
     this.blackListCleanupTimer = 1000 * 60 * 2
-    this.logTimerInterval = 10000
+    this.logTimerInterval = 30000
 
     // inject the downloadCid function to the provided node.
     this.node.pftpDownload = this.downloadCid
@@ -53,6 +53,8 @@ class PFTProtocol {
     this.renewConnections = this.renewConnections.bind(this)
     this.renewConnectionsTimeout = 60000
     this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
+
+    this.handleTopicSubscriptionInterval = setInterval(() => { this.topicHandler([this.topic]) }, 90000)
   }
 
   async start () {
@@ -64,7 +66,7 @@ class PFTProtocol {
     // handle pubsub
     this.listenPubsub()
 
-    this.topicHandler(this.topic)
+    this.topicHandler([this.topic])
 
     // handle protocol
     this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
@@ -72,8 +74,6 @@ class PFTProtocol {
     await this.renewConnections()
 
     this.nofitySubscriptionInterval = setInterval(async () => {
-      this.topicHandler(this.topic)
-
       const msg = {
         multiAddress: this.node.addresses[0],
         knownPeers: this.getKnownPeers()
@@ -171,14 +171,17 @@ class PFTProtocol {
         await stream.close().catch(err => {
           this.log('Error closing stream:', err)
         })
+        this.log('handlePFTProtocol closed stream')
       }
     }
   }
 
   async fetchCidFromPeer (cid, address) {
+    let stream
     try {
       this.log('Request new content')
-      const stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
+      stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
+      this.log('Stream Id', stream.id)
       const encoder = new TextEncoder()
 
       // Enviar el CID que queremos
@@ -186,8 +189,6 @@ class PFTProtocol {
 
       const cidAdded = await this.node.ufs.addBytes(async function * () {
         for await (const chunk of stream.source) {
-          // this.log('Received chunk')
-          // console.log('chunk', chunk.subarray())
           yield chunk.subarray()
         }
       }())
@@ -201,6 +202,15 @@ class PFTProtocol {
     } catch (error) {
       this.log('Error in fetchCidFromPeer(): ', error)
       return false
+    } finally {
+      console.log('try to close stream')
+      if (stream) {
+        // Ensure stream is properly closed
+        await stream.close().catch(err => {
+          this.log('Error closing stream:', err)
+        })
+        this.log('fetchCidFromPeer closed stream')
+      }
     }
   }
 
@@ -216,6 +226,7 @@ class PFTProtocol {
 
       for (const address of this.privateAddresssStore) {
         const result = await this.fetchCidFromPeer(cid, address)
+        // console.log('result', result)
         if (result) {
           return true
         }
@@ -304,13 +315,16 @@ class PFTProtocol {
     }
   }
 
-  topicHandler (topic) {
+  topicHandler (topics = []) {
     try {
-      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(topic)
-      if (!isSubscribed) {
+      for (const topic of topics) {
+        this.node.helia.libp2p.services.pubsub.unsubscribe(topic)
         this.node.helia.libp2p.services.pubsub.subscribe(topic)
         this.log(`Subcribed to : ${topic}`)
+        const peerListeners = this.node.helia.libp2p.services.pubsub.getPeers(topic)
+        this.log(`${topic} peerListeners`, peerListeners)
       }
+
       return true
     } catch (error) {
       this.log('Error in PinRPC/topicHandler()', error)

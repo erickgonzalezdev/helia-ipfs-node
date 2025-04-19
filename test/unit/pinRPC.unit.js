@@ -1193,33 +1193,23 @@ describe('#pinRPC.js', () => {
     })
   })
   describe('#topicHandler', () => {
-    it('should subiscribe if topic is not subscribed', async () => {
+    it('should re-subscribe to topics', async () => {
       try {
-        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'getTopics').returns([])
-        const spy = sandbox.spy(uut.node.helia.libp2p.services.pubsub, 'subscribe')
-        const result = uut.topicHandler('topic')
+        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'unsubscribe').returns(true)
+        const spy = sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'subscribe').returns(true)
+        const result = uut.topicHandler(['topic1', 'topic2'])
         assert.isTrue(result)
-        assert.isTrue(spy.calledOnce)
+        assert.isTrue(spy.calledTwice)
       } catch (err) {
         console.log(err)
         assert.fail('Unexpected code path')
       }
     })
-    it('should not subiscribe if topic is subscribed', async () => {
-      try {
-        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'getTopics').returns(['topic'])
-        const spy = sandbox.spy(uut.node.helia.libp2p.services.pubsub, 'subscribe')
-        const result = uut.topicHandler('topic')
-        assert.isTrue(result)
-        assert.isFalse(spy.calledOnce)
-      } catch (err) {
-        assert.fail('Unexpected code path')
-      }
-    })
+
     it('should handle error', async () => {
       try {
-        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'subscribe').throws(new Error('test error'))
-        const result = uut.topicHandler('topic')
+        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'unsubscribe').throws(new Error('test error'))
+        const result = uut.topicHandler(['topic1', 'topic2'])
         assert.isFalse(result)
       } catch (err) {
         assert.include(err.message, 'test error')

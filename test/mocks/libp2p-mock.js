@@ -6,6 +6,8 @@ class Pubsub {
   async publish () { return true }
   async addEventListener () { return true }
   async getTopics () { return [] }
+  async unsubscribe () { return true }
+  async getPeers () { return [] }
 }
 class ContentRoutingMock {
   constructor (config) { this.config = config }
