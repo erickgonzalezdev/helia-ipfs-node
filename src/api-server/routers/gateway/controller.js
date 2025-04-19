@@ -12,6 +12,7 @@ export default class Gateway {
     this.getContent = this.getContent.bind(this)
     this.handleError = this.handleError.bind(this)
     this.setHelloWorld = this.setHelloWorld.bind(this)
+    this.getConnections = this.getConnections.bind(this)
     this.log = this.node.log || console.log
   }
 
@@ -211,6 +212,15 @@ export default class Gateway {
       }
     } else {
       ctx.throw(422, err.message)
+    }
+  }
+
+  async getConnections (ctx) {
+    try {
+      const connections = await this.node.getConnections()
+      ctx.body = { connections: connections.length }
+    } catch (error) {
+      this.handleError(ctx, error)
     }
   }
 }

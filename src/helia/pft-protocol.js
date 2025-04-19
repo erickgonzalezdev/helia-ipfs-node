@@ -284,12 +284,13 @@ class PFTProtocol {
       for (const address of this.privateAddresssStore) {
         // Try to connect to each address into the private addresss store
         try {
-          await this.node.connect(address)
+          const connection = await this.node.connect(address)
+          connection.tags.push('pftp')
+
           this.log(`Successfully connected to peer : ${address}`)
         } catch (dialError) {
           this.log(`Failed to connect to ${address}: ${dialError.message}`)
           this.removeKnownPeer(address)
-          this.node.tryDisconnect(address)
 
           continue // Try next address if available
         }

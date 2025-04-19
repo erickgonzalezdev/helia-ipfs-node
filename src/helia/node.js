@@ -111,8 +111,8 @@ class HeliaNode {
       alias: this.opts.alias,
       relay: this.opts.relay,
       announce: this.opts.announce,
-      serverDHTProvide: this.opts.serverDHTProvide
-      // maxConnections: this.opts.maxConnections || 500
+      serverDHTProvide: this.opts.serverDHTProvide,
+      maxConnections: this.opts.maxConnections || 100
     }
 
     let existingKey
@@ -167,6 +167,9 @@ class HeliaNode {
             `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
             ]
           : []
+      },
+      connectionManager: {
+        maxConnections: this.opts.maxConnections || 50
       },
       transports: [
         tcp({ logger: logger('upgrade') }),
@@ -237,6 +240,7 @@ class HeliaNode {
       this.log(`RELAY : ${!!this.opts.relay}`)
       this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
       this.log(`Announce Public Addresses: ${!!this.opts.announce}`)
+      this.log(`MAX CONNECTIONS : ${this.opts.maxConnections}`)
 
       const libp2p = await this.createLibp2p(libp2pInputs)
 
@@ -252,9 +256,7 @@ class HeliaNode {
       this.log('Multiaddrs: ', multiaddrs)
 
       this.ufs = this.unixfs(this.helia)
-
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)
-
       return this.helia
     } catch (error) {
       this.log('error in helia/start()', error)
