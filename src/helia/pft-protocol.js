@@ -123,6 +123,9 @@ class PFTProtocol {
               this.log(`Successfully reconnected to peer: ${connection.remoteAddr}`)
             } catch (error) {
               this.log(`Failed to reconnect to ${address}: ${error.message}`)
+              if(address === this.knownPeerAddress) {
+                this.knownPeerIsConnected = false
+              }
               this.removeKnownPeer(address)
             }
             break
