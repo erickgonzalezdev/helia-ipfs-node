@@ -35,25 +35,27 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    this.renewConnections = this.renewConnections.bind(this)
+    this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
+    this.cleanKnownPeers = this.cleanKnownPeers.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
     this.blackListAddresssStore = [] //  Save all addresses that failed to connect
+    this.disconnectedPeerRecordsTime = {}
 
-    this.notificationTimer = 20000
-    this.blackListCleanupTimer = 1000 * 60 * 2
+    this.notificationTimer = 6000
+    this.cleanKnownPeersTimer = 30000
     this.logTimerInterval = 30000
 
     // inject the downloadCid function to the provided node.
     this.node.pftpDownload = this.downloadCid
 
     // renew connections timer
-    this.renewConnectionsTimeout = 10000
-    this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
+    this.renewInitialKnownPeerTimer = 10000
+    this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
 
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
   }
@@ -87,9 +89,7 @@ class PFTProtocol {
     }, this.notificationTimer)
 
     // Clean Black list every 2 minutes
-    this.blackListCleanupInterval = setInterval(() => {
-      this.blackListAddresssStore = []
-    }, this.blackListCleanupTimer)
+    this.cleanPeerRecordsInterval = setInterval(this.cleanKnownPeers, this.cleanKnownPeersTimer)
 
     // Show known peers addresses every 10 seconds
     this.logPrivateAddresssStoreInterval = setInterval(() => {
@@ -97,6 +97,20 @@ class PFTProtocol {
     }, this.logTimerInterval)
 
     return true
+  }
+
+  cleanKnownPeers () {
+    for (const address of this.privateAddresssStore) {
+      const disconnectedTime = this.disconnectedPeerRecordsTime[address]
+      if (disconnectedTime) {
+        const timeSinceDisconnect = Math.floor((new Date().getTime() - disconnectedTime) / 1000)
+        this.log(`Time since disconnect: ${timeSinceDisconnect} seconds for address: ${address}`)
+        // Dont remove peer if has been disconnected for less than 3 minutes
+        if (timeSinceDisconnect > 180) { // 3 minutes in seconds
+          this.removeKnownPeer(address)
+        }
+      }
+    }
   }
 
   listenPubsub () {
@@ -117,17 +131,18 @@ class PFTProtocol {
         // Check if disconnected peer is in our known peers list
         for (const address of this.privateAddresssStore) {
           if (address.includes(disconnectedPeerId)) {
+            this.disconnectedPeerRecordsTime[address] = new Date().getTime()
             this.log(`Attempting to reconnect to known peer: ${address}`)
             try {
               const connection = await this.node.connect(address)
               this.log(`Successfully reconnected to peer: ${connection.remoteAddr}`)
+              this.disconnectedPeerRecordsTime[address] = null
             } catch (error) {
               this.log(`Failed to reconnect to ${address}: ${error.message}`)
-              if(address === this.knownPeerAddress) {
+              if (address === this.knownPeerAddress) {
                 this.log(`Failed to reconnect to known peer: ${address}`)
                 this.knownPeerIsConnected = false
               }
-              this.removeKnownPeer(address)
             }
             break
           }
@@ -315,7 +330,7 @@ class PFTProtocol {
         return false
       }
       await this.node.connect(address)
-      if(address === this.knownPeerAddress) {
+      if (address === this.knownPeerAddress) {
         this.knownPeerIsConnected = true
       }
       this.privateAddresssStore.push(address)
@@ -339,11 +354,11 @@ class PFTProtocol {
       if (address === this.knownPeerAddress) {
         throw new Error('Cannot remove initial known peer address')
       }
+
       const index = this.privateAddresssStore.indexOf(address)
       if (index === -1) {
         return false
       }
-      this.blackListAddresssStore.push(address)
       this.privateAddresssStore.splice(index, 1)
       return true
     } catch (error) {
@@ -378,22 +393,22 @@ class PFTProtocol {
       }
     } */
 
-  async renewConnections () {
+  async renewInitialKnownPeerConnection () {
     try {
       this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
       if (!this.knownPeerAddress || this.knownPeerIsConnected) {
-        this.log(`No known peer address or already connected to known peer`)
+        this.log('No known peer address or already connected to known peer')
         return true
       }
       this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
-      clearInterval(this.reconnectConnectionsInterval)
+      clearInterval(this.reconnectInitialKnownPeerInterval)
       await this.node.connect(this.knownPeerAddress)
       this.knownPeerIsConnected = true
       this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
-      this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
+      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
     } catch (error) {
-      this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
-      this.log('Error in PFTProtocol/renewConnections()', error.message)
+      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+      this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
     }
   }
 

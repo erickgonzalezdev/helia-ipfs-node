@@ -102,7 +102,6 @@ class PinRPC {
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 90000)
 
-
     this.lastDiskSize = 0
     this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
   }
@@ -124,7 +123,7 @@ class PinRPC {
           role: this.role,
           onQueue: this.onQueue.length,
           onProvideQueue: this.onProvideQueue.length,
-          diskSize : this.lastDiskSize
+          diskSize: this.lastDiskSize
         }
         const msgStr = JSON.stringify(msg)
         this.log('Sending notify-state')
