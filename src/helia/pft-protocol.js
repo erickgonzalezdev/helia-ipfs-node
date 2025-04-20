@@ -193,14 +193,10 @@ class PFTProtocol {
 
       // Validate CID with timeout
       const cidChunks = []
-      const timeout = setTimeout(() => {
-        throw new Error('CID reception timeout')
-      }, 30000)
 
       for await (const chunk of source) {
         cidChunks.push(decoder.decode(chunk.bufs[0]))
       }
-      clearTimeout(timeout)
 
       const cid = cidChunks.join('')
       this.log(`PFT connection requesting cid: ${cid}`)
