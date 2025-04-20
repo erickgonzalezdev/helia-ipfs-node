@@ -370,6 +370,7 @@ class PinRPC {
       }
       this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
       this.deleteFromQueueArray(inObj.cid)
+      this.addToProvideQueue(inObj)
       return true
     } catch (error) {
       this.deleteFromQueueArray(inObj.cid)
