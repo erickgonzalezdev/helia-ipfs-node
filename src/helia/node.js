@@ -19,6 +19,7 @@ import { bootstrapConfig } from '../util/bootstrap.js'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 
 import { webSockets } from '@libp2p/websockets'
+import { ping } from '@libp2p/ping'
 
 // import { autoNAT } from '@libp2p/autonat'
 import { kadDHT, removePrivateAddressesMapper } from '@libp2p/kad-dht'
@@ -192,6 +193,7 @@ class HeliaNode {
       services: {
         identify: identify(),
         pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+        ping: ping(),
         dht: kadDHT({
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
@@ -219,9 +221,9 @@ class HeliaNode {
       const blockStorePath = `${options.storePath}/blockstore`
       const dataStorePath = `${options.storePath}/datastore`
 
-      // if (this.fs.existsSync(`${dataStorePath}/peers`)) {
-      //   await this.fs.promises.rm(`${dataStorePath}/peers`, { recursive: true, force: true })
-      // }
+      if (this.fs.existsSync(`${dataStorePath}/peers`)) {
+        await this.fs.promises.rm(`${dataStorePath}/peers`, { recursive: true, force: true })
+      }
 
       // Create block and data stores.
       const blockstore = new this.FsBlockstore(blockStorePath)

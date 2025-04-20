@@ -20,7 +20,8 @@ class Libp2pMock {
   constructor () {
     this.contentRouting = new ContentRoutingMock()
     this.services = {
-      pubsub: new Pubsub()
+      pubsub: new Pubsub(),
+      ping: { ping: () => { return 1 } }
     }
   }
 

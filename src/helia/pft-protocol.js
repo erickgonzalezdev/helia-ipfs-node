@@ -296,13 +296,12 @@ class PFTProtocol {
         // Try to connect to each address into the private addresss store
         try {
           const connection = await this.node.connect(address)
-          connection.tags.push('pftp')
-
-          this.log(`Successfully connected to peer : ${address}`)
+          const ttl = await this.node.helia.libp2p.services.ping.ping(multiaddr(address))
+          console.log('ttl', ttl)
+          this.log(`Successfully connected to peer : ${connection.remoteAddr}`)
         } catch (dialError) {
           this.log(`Failed to connect to ${address}: ${dialError.message}`)
           this.removeKnownPeer(address)
-
           continue // Try next address if available
         }
       }

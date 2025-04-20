@@ -274,10 +274,17 @@ describe('#PFTProtocol', () => {
   })
   describe('#renewConnections', () => {
     it('should renew connections', async () => {
-      uut.privateAddresssStore = ['testaddress']
-      sandbox.stub(uut.node, 'connect').resolves(true)
-      const result = await uut.renewConnections()
-      assert.isTrue(result)
+      try {
+        uut.privateAddresssStore = ['/ip4/127.0.0.1']
+        const spyConnect = sandbox.stub(uut.node, 'connect').resolves(true)
+        const spyPing = sandbox.stub(uut.node.helia.libp2p.services.ping, 'ping').resolves(1)
+        const result = await uut.renewConnections()
+        assert.isTrue(result)
+        assert.isTrue(spyConnect.called)
+        assert.isTrue(spyPing.called)
+      } catch (error) {
+        assert.fail('Unexpected code path')
+      }
     })
     it('should return false on error', async () => {
       uut.privateAddresssStore = null
