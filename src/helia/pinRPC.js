@@ -96,7 +96,7 @@ class PinRPC {
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
-    this.notificationTimer = 30000
+    this.notificationTimer = 5000
 
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
