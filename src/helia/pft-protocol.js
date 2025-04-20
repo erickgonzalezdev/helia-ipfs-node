@@ -35,7 +35,7 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    // this.renewConnections = this.renewConnections.bind(this)
+    this.renewConnections = this.renewConnections.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
