@@ -21,6 +21,7 @@ class PFTProtocol {
     this.topic = config.topic
     this.node = config.node
     this.knownPeerAddress = config.knownPeerAddress
+    this.knownPeerIsConnected = false
     this.log = this.node.log || console.log
     this.CID = CID
     this.pipe = pipe
@@ -51,7 +52,7 @@ class PFTProtocol {
     this.node.pftpDownload = this.downloadCid
 
     // renew connections timer
-    this.renewConnectionsTimeout = 60000
+    this.renewConnectionsTimeout = 10000
     this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
 
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
@@ -310,6 +311,9 @@ class PFTProtocol {
         return false
       }
       await this.node.connect(address)
+      if(address === this.knownPeerAddress) {
+        this.knownPeerIsConnected = true
+      }
       this.privateAddresssStore.push(address)
       this.log(`Successfully connected to peer: ${address}`)
       return true
@@ -372,11 +376,11 @@ class PFTProtocol {
 
   async renewConnections () {
     try {
-      clearInterval(this.reconnectConnectionsInterval)
-      if (!this.knownPeerAddress) {
-        // No renew interval if no known peer address
+      if (!this.knownPeerAddress || this.knownPeerIsConnected) {
         return true
       }
+      this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
+      clearInterval(this.reconnectConnectionsInterval)
       await this.node.connect(this.knownPeerAddress)
       this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
       this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
