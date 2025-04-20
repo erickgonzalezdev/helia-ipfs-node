@@ -124,6 +124,7 @@ class PFTProtocol {
             } catch (error) {
               this.log(`Failed to reconnect to ${address}: ${error.message}`)
               if(address === this.knownPeerAddress) {
+                this.log(`Failed to reconnect to known peer: ${address}`)
                 this.knownPeerIsConnected = false
               }
               this.removeKnownPeer(address)
@@ -379,12 +380,15 @@ class PFTProtocol {
 
   async renewConnections () {
     try {
+      this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
       if (!this.knownPeerAddress || this.knownPeerIsConnected) {
+        this.log(`No known peer address or already connected to known peer`)
         return true
       }
       this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
       clearInterval(this.reconnectConnectionsInterval)
       await this.node.connect(this.knownPeerAddress)
+      this.knownPeerIsConnected = true
       this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
       this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
     } catch (error) {
