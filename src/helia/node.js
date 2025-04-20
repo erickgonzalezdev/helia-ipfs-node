@@ -113,7 +113,7 @@ class HeliaNode {
       relay: this.opts.relay,
       announce: this.opts.announce,
       serverDHTProvide: this.opts.serverDHTProvide,
-      maxConnections: this.opts.maxConnections || 100
+      maxConnections: this.opts.maxConnections || 300
     }
 
     let existingKey

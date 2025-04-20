@@ -101,6 +101,10 @@ class PinRPC {
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 90000)
+
+
+    this.lastDiskSize = 0
+    this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
   }
 
   async start () {
@@ -111,7 +115,6 @@ class PinRPC {
       this.topicHandler()
       // Send notification message above the state topic
       this.nofitySubscriptionInterval = setInterval(async () => {
-        const diskSize = await this.node.getDiskSize()
         const msg = {
           msgType: 'notify-state',
           timeStamp: new Date().getTime(),
@@ -121,7 +124,7 @@ class PinRPC {
           role: this.role,
           onQueue: this.onQueue.length,
           onProvideQueue: this.onProvideQueue.length,
-          diskSize
+          diskSize : this.lastDiskSize
         }
         const msgStr = JSON.stringify(msg)
         this.log('Sending notify-state')
@@ -130,6 +133,18 @@ class PinRPC {
     } catch (error) {
       this.log(error)
       throw error
+    }
+  }
+
+  async updateDiskSize () {
+    try {
+      clearInterval(this.lastDiskSizeInterval)
+      const diskSize = await this.node.getDiskSize()
+      this.lastDiskSize = diskSize || this.lastDiskSize
+      this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
+    } catch (error) {
+      this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
+      this.log('Error on pinRPC/updateDiskSize()', error)
     }
   }
 
