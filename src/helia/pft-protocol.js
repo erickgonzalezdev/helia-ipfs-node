@@ -249,14 +249,14 @@ class PFTProtocol {
 
       // Add timeout for receiving data
       const receivedData = []
-      const receiveTimeout = setTimeout(() => {
+      /*     const receiveTimeout = setTimeout(() => {
         throw new Error('Data reception timeout')
-      }, 60000)
+      }, 60000) */
 
       for await (const chunk of stream.source) {
         receivedData.push(chunk.subarray())
       }
-      clearTimeout(receiveTimeout)
+      // clearTimeout(receiveTimeout)
 
       const cidAdded = await this.node.ufs.addBytes(async function * () {
         for (const chunk of receivedData) {
