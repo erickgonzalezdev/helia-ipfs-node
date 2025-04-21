@@ -316,6 +316,9 @@ class PFTProtocol {
       if (address === this.node.addresses[0].toString()) {
         return false
       }
+      if (address.includes(this.node.peerId.toString())) {
+        return false
+      }
       if (this.privateAddresssStore.includes(address)) {
         return true
       }
