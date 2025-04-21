@@ -310,6 +310,8 @@ class PFTProtocol {
 
   async addKnownPeer (address) {
     try {
+      this.log(`Adding known peer: ${address}`)
+      this.log('My node.peerId', this.node.peerId)
       if (!address) {
         throw new Error('Address is required')
       }
@@ -336,7 +338,7 @@ class PFTProtocol {
       this.log(`Successfully connected to peer: ${address}`)
       return true
     } catch (error) {
-      // this.log('Error in addKnownPeer(): ', error)
+      this.log('Error in addKnownPeer(): ', error.message)
       return false
     }
   }
