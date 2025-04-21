@@ -113,7 +113,8 @@ class HeliaNode {
       relay: this.opts.relay,
       announce: this.opts.announce,
       serverDHTProvide: this.opts.serverDHTProvide,
-      maxConnections: this.opts.maxConnections || 300
+      maxConnections: this.opts.maxConnections || 300,
+      announceAddr: this.opts.announceAddr
     }
 
     let existingKey
@@ -163,10 +164,13 @@ class HeliaNode {
           '/webrtc'
         ],
         announce: this.opts.announce
-          ? [
-            `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-            `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-            ]
+          ? this.opts.announceAddr
+            ? [
+                this.opts.announceAddr
+              ]
+            : [
+                `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`
+              ]
           : []
       },
       connectionManager: {

@@ -24,6 +24,7 @@ const announce = process.env.ANNOUNCE // For production mode , use your public a
 const serverDHTProvide = process.env.SERVER_DHT_PROVIDE // Start a DHT server to provide content
 const role = process.env.ROLE || 'node' // 'node' 'pinner' 'delegator'
 const maxConnections = process.env.MAX_CONNECTIONS ? process.env.MAX_CONNECTIONS : 100
+const announceAddr = process.env.ANNOUNCE_ADDR ? process.env.ANNOUNCE_ADDR : ''
 //  Initialize A node with tools.
 const start = async () => {
   // Instantiate helia node.
@@ -34,6 +35,7 @@ const start = async () => {
     networking: netWorking,
     relay,
     announce,
+    announceAddr,
     serverDHTProvide,
     maxConnections
   })
