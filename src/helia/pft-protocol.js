@@ -22,6 +22,7 @@ class PFTProtocol {
     this.node = config.node
     this.knownPeerAddress = config.knownPeerAddress
     this.knownPeerIsConnected = false
+    this.knownPeerDisconnectedTimes = 0 // For log only
     this.log = this.node.log || console.log
     this.CID = CID
     this.pipe = pipe
@@ -40,24 +41,29 @@ class PFTProtocol {
     this.topicHandler = this.topicHandler.bind(this)
     this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
     this.cleanKnownPeers = this.cleanKnownPeers.bind(this)
+    this.handlePendingReconnects = this.handlePendingReconnects.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
     this.blackListAddresssStore = [] //  Save all addresses that failed to connect
     this.disconnectedPeerRecordsTime = {}
+    this.pendingReconnects = []
 
     this.notificationTimer = 6000
     this.cleanKnownPeersTimer = 30000
-    this.logTimerInterval = 30000
+    this.logTimerInterval = 15000
 
     // inject the downloadCid function to the provided node.
     this.node.pftpDownload = this.downloadCid
 
     // renew connections timer
     this.renewInitialKnownPeerTimer = 10000
-    this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+    // this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
 
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
+
+    this.pendingReconnectsInterval = 15000
+    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
   }
 
   async start () {
@@ -94,6 +100,7 @@ class PFTProtocol {
     // Show known peers addresses every 10 seconds
     this.logPrivateAddresssStoreInterval = setInterval(() => {
       this.log('PFTP Known Peers addresses: ', this.privateAddresssStore)
+      this.log(`Known peer disconnected times: ${this.knownPeerDisconnectedTimes}`)
     }, this.logTimerInterval)
 
     return true
@@ -131,18 +138,15 @@ class PFTProtocol {
         // Check if disconnected peer is in our known peers list
         for (const address of this.privateAddresssStore) {
           if (address.includes(disconnectedPeerId)) {
+            if (this.pendingReconnects.includes(address)) {
+              continue
+            }
+            this.log(`\x1b[33mDisconnected known peer: ${disconnectedPeerId}\x1b[0m`)
+            this.pendingReconnects.push(address)
             this.disconnectedPeerRecordsTime[address] = new Date().getTime()
-            this.log(`Attempting to reconnect to known peer: ${address}`)
-            try {
-              const connection = await this.node.connect(address)
-              this.log(`Successfully reconnected to peer: ${connection.remoteAddr}`)
-              this.disconnectedPeerRecordsTime[address] = null
-            } catch (error) {
-              this.log(`Failed to reconnect to ${address}: ${error.message}`)
-              if (address === this.knownPeerAddress) {
-                this.log(`Failed to reconnect to known peer: ${address}`)
-                this.knownPeerIsConnected = false
-              }
+            if (address === this.knownPeerAddress) {
+              this.knownPeerIsConnected = false
+              this.knownPeerDisconnectedTimes += 1
             }
             break
           }
@@ -151,6 +155,31 @@ class PFTProtocol {
         this.log('Error on PFTP/listenPeerDisconnections()', error)
       }
     })
+  }
+
+  async handlePendingReconnects () {
+    if (this.pendingReconnects.length === 0) {
+      return
+    }
+    this.log(`\x1b[33mPendings ${this.pendingReconnects.length} reconnects`)
+    clearInterval(this.handlePendingReconnectsInterval)
+    for (const address of this.pendingReconnects) {
+      this.log(`\x1b[33mAttempting to reconnect to known peer: ${address}\x1b[0m`)
+      try {
+        const connection = await this.node.connect(address)
+        this.log(`\x1b[33smSuccessfully reconnected to peer: ${connection.remoteAddr}\x1b[0m`)
+        this.disconnectedPeerRecordsTime[address] = null
+        // Remove from pending reconnects after successful reconnection
+        this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== address)
+
+        if (address === this.knownPeerAddress) {
+          this.knownPeerIsConnected = true
+        }
+      } catch (error) {
+        this.log(`\x1b[31mFailed to reconnect to ${address}: ${error.message}\x1b[0m`)
+      }
+    }
+    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
   }
 
   handlePubsubMsg (message = {}) {
@@ -186,7 +215,7 @@ class PFTProtocol {
     }
 
     try {
-      this.log('New PFT connection request.')
+      this.log('\x1b[32mNew PFT connection request.\x1b[0m')
       const decoder = new TextDecoder()
       const source = stream.source
       const sink = stream.sink
@@ -199,7 +228,7 @@ class PFTProtocol {
       }
 
       const cid = cidChunks.join('')
-      this.log(`PFT connection requesting cid: ${cid}`)
+      this.log(`\x1b[32mPFT connection requesting cid: ${cid}\x1b[0m`)
 
       // Validate CID format
       if (!cid || typeof cid !== 'string') {
@@ -216,17 +245,17 @@ class PFTProtocol {
       const fileStream = await this.node.ufs.cat(cid)
       await this.pipe(fileStream, sink)
 
-      this.log('PFT connection request successful.')
+      this.log('\x1b[32mPFT connection request successful.\x1b[0m')
       return true
     } catch (error) {
-      this.log('Error in handlePFTProtocol(): ', error)
+      this.log('\x1b[31mError in handlePFTProtocol(): \x1b[0m', error)
       return false
     } finally {
       if (stream) {
         await stream.close().catch(err => {
-          this.log('Error closing stream:', err)
+          this.log('\x1b[31mError closing stream:\x1b[0m', err)
         })
-        this.log('handlePFTProtocol closed stream')
+        this.log('\x1b[31mhandlePFTProtocol closed stream\x1b[0m')
       }
     }
   }
@@ -238,11 +267,12 @@ class PFTProtocol {
 
     let stream
     try {
-      this.log(`Requesting content for CID: ${cid} from address: ${address}`)
+      this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
 
       // Add timeout to dial
+
       stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
-      this.log('Stream established:', stream.id)
+      this.log('\x1b[32mStream established:\x1b[0m', stream.id)
 
       const encoder = new TextEncoder()
       await stream.sink([encoder.encode(cid)])
@@ -271,15 +301,19 @@ class PFTProtocol {
       this.log('Successfully downloaded and verified CID:', cid)
       return true
     } catch (error) {
-      this.log('Error in fetchCidFromPeer(): ', error)
+      if (error.name === 'AbortError') {
+        this.log('\x1b[31mTimeout reached while downloading CID\x1b[0m')
+      } else {
+        this.log('\x1b[31mError in fetchCidFromPeer(): \x1b[0m', error)
+      }
       // Add peer to blacklist after multiple failures
       return false
     } finally {
       if (stream) {
         await stream.close().catch(err => {
-          this.log('Error closing stream:', err)
+          this.log('\x1b[31mError closing stream:\x1b[0m', err)
         })
-        this.log('fetchCidFromPeer closed stream')
+        this.log('\x1b[31mfetchCidFromPeer closed stream\x1b[0m')
       }
     }
   }
@@ -310,8 +344,6 @@ class PFTProtocol {
 
   async addKnownPeer (address) {
     try {
-      this.log(`Adding known peer: ${address}`)
-      this.log('My node.peerId', this.node.peerId)
       if (!address) {
         throw new Error('Address is required')
       }
@@ -367,33 +399,12 @@ class PFTProtocol {
       return false
     }
   }
-  /*
-    // Renew subscription connection
-    async renewConnections() {
-      try {
-        clearInterval(this.reconnectConnectionsInterval)
-        for (const address of this.privateAddresssStore) {
-          // Try to connect to each address into the private addresss store
-          try {
-            const connection = await this.node.connect(address)
-            const ttl = await this.node.helia.libp2p.services.ping.ping(multiaddr(address))
-            console.log('ttl', ttl)
-            this.log(`Successfully connected to peer : ${connection.remoteAddr}`)
-          } catch (dialError) {
-            this.log(`Failed to connect to ${address}: ${dialError.message}`)
-            this.removeKnownPeer(address)
-            continue // Try next address if available
-          }
-        }
-        this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
-        return true
-      } catch (error) {
-        this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
-        this.log('Error in PFTProtocol/renewConnections()', error.message)
-        return false
-      }
-    } */
 
+  /**
+   *
+   * This function is used to renew the connection to the initial known peer
+   * TODO :  verif if this function is needed due to the pending reconnects
+   */
   async renewInitialKnownPeerConnection () {
     try {
       this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
@@ -406,6 +417,7 @@ class PFTProtocol {
       await this.node.connect(this.knownPeerAddress)
       this.knownPeerIsConnected = true
       this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
+      this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
       this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
     } catch (error) {
       this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)

@@ -57,7 +57,7 @@ const start = async () => {
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
 
-  // await node.helia.gc()
+  await node.helia.gc()
 }
 
 start()
