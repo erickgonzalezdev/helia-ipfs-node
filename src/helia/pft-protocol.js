@@ -20,6 +20,12 @@ import { identify } from '@libp2p/identify'
 import { logger, disable } from '@libp2p/logger'
 import { createLibp2p } from 'libp2p'
 
+function concat (a, b) {
+  const c = new Uint8Array(a.length + b.length)
+  c.set(a, 0)
+  c.set(b, a.length)
+  return c
+}
 
 class PFTProtocol {
   constructor (config = {}) {
@@ -29,7 +35,7 @@ class PFTProtocol {
     this.pftPort = config.pftPort || 4004
     this.protocol = '/pft/1.0.0'
     this.topic = config.topic
-    this.announce = config.node.opts.announce 
+    this.announce = config.node.opts.announce
     this.ip4 = config.node.ip4
     this.node = config.node
     this.selfAddress = null
@@ -84,7 +90,7 @@ class PFTProtocol {
     await this.instantiateLibp2p()
     // add provided known peer to address store
     await this.addKnownPeer(this.knownPeerAddress)
-    //if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
+    // if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
     // handle pubsub
     this.listenPubsub()
     this.topicHandler()
@@ -127,8 +133,8 @@ class PFTProtocol {
     this.libp2p = await this.createLibp2p({
       privateKey: this.node.keyPair,
       addresses: {
-        listen:[`/ip4/0.0.0.0/tcp/${this.pftPort}`],
-        announce: this.announce ? [`/ip4/${this.ip4}/tcp/${this.pftPort}`] : [],
+        listen: [`/ip4/0.0.0.0/tcp/${this.pftPort}`],
+        announce: this.announce ? [`/ip4/${this.ip4}/tcp/${this.pftPort}`] : []
 
       },
       connectionManager: {
@@ -136,7 +142,12 @@ class PFTProtocol {
         autoDial: true
       },
       transports: [
-        tcp({ logger: logger('upgrade') })
+        tcp({
+          logger: logger('upgrade'),
+          timeout: 20000, // Connection timeout in ms
+          keepAlive: true,
+          noDelay: true
+        })
       ],
       connectionEncrypters: [
         noise()
@@ -293,7 +304,31 @@ class PFTProtocol {
       }
 
       const fileStream = await this.node.ufs.cat(cid)
-      await this.pipe(fileStream, sink)
+
+      // Add chunking and size limits
+      await this.pipe(
+        fileStream,
+        // Enhanced transform function with better chunking and backpressure handling
+        async function * (source) {
+          const CHUNK_SIZE = 1024 * 1024 // 1MB chunks
+          let buffer = new Uint8Array(0)
+
+          for await (const chunk of source) {
+            buffer = concat(buffer, chunk)
+            // console.log('buffer', buffer.length)
+            while (buffer.length >= CHUNK_SIZE) {
+              yield buffer.slice(0, CHUNK_SIZE)
+              buffer = buffer.slice(CHUNK_SIZE)
+            }
+          }
+
+          // Send any remaining data
+          if (buffer.length > 0) {
+            yield buffer
+          }
+        },
+        sink
+      )
 
       this.log('\x1b[32mPFT connection request successful.\x1b[0m')
       return true
@@ -483,25 +518,25 @@ class PFTProtocol {
    * This function is used to renew the connection to the initial known peer
    * TODO :  verif if this function is needed due to the pending reconnects
    */
-    async renewInitialKnownPeerConnection() {
-      try {
-        this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
-        if (!this.knownPeerAddress || this.knownPeerIsConnected) {
-          this.log('No known peer address or already connected to known peer')
-          return true
-        }
-        this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
-        clearInterval(this.reconnectInitialKnownPeerInterval)
-        await this.connect(this.knownPeerAddress)
-        this.knownPeerIsConnected = true
-        this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
-        this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
-        this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-      } catch (error) {
-        this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-        this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
+  async renewInitialKnownPeerConnection () {
+    try {
+      this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
+      if (!this.knownPeerAddress || this.knownPeerIsConnected) {
+        this.log('No known peer address or already connected to known peer')
+        return true
       }
-    } 
+      this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
+      clearInterval(this.reconnectInitialKnownPeerInterval)
+      await this.connect(this.knownPeerAddress)
+      this.knownPeerIsConnected = true
+      this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
+      this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
+      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+    } catch (error) {
+      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+      this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
+    }
+  }
 }
 
 export default PFTProtocol
