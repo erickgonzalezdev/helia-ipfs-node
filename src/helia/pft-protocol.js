@@ -48,7 +48,7 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    // this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
+    this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
@@ -80,8 +80,8 @@ class PFTProtocol {
     this.log(`Starting on Private file transfer protocol ( PFTP) on protocol ${this.protocol}`)
     await this.instantiateLibp2p()
     // add provided known peer to address store
-    const connected = await this.addKnownPeer(this.knownPeerAddress)
-    if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
+    await this.addKnownPeer(this.knownPeerAddress)
+    //if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
     // handle pubsub
     this.listenPubsub()
     this.topicHandler()
@@ -478,7 +478,7 @@ class PFTProtocol {
    * This function is used to renew the connection to the initial known peer
    * TODO :  verif if this function is needed due to the pending reconnects
    */
-  /*   async renewInitialKnownPeerConnection() {
+    async renewInitialKnownPeerConnection() {
       try {
         this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
         if (!this.knownPeerAddress || this.knownPeerIsConnected) {
@@ -496,7 +496,7 @@ class PFTProtocol {
         this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
         this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
       }
-    } */
+    } 
 }
 
 export default PFTProtocol
