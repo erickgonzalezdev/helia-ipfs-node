@@ -61,11 +61,14 @@ const start = async () => {
   await gb.start()
 
   await node.helia.gc()
-
-  await node.connect(pinServiceAddress)
+  try { await node.connect(pinServiceAddress)} catch (error) {}
   setInterval(async () => {
     if (pinServiceAddress) {
-      await node.connect(pinServiceAddress)
+      try {
+        try { await node.connect(pinServiceAddress)} catch (error) {}
+      } catch (error) {
+        console.log('Error connecting to pin service', error)
+      }
     }
   }, 30000)
 }

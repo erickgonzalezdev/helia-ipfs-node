@@ -20,6 +20,7 @@ import { identify } from '@libp2p/identify'
 import { logger, disable } from '@libp2p/logger'
 import { createLibp2p } from 'libp2p'
 
+
 class PFTProtocol {
   constructor (config = {}) {
     if (!config.node) {
@@ -28,6 +29,8 @@ class PFTProtocol {
     this.pftPort = config.pftPort || 4004
     this.protocol = '/pft/1.0.0'
     this.topic = config.topic
+    this.announce = config.node.opts.announce 
+    this.ip4 = config.node.ip4
     this.node = config.node
     this.selfAddress = null
     this.knownPeerAddress = config.knownPeerAddress
@@ -124,7 +127,9 @@ class PFTProtocol {
     this.libp2p = await this.createLibp2p({
       privateKey: this.node.keyPair,
       addresses: {
-        listen: [`/ip4/0.0.0.0/tcp/${this.pftPort}`]
+        listen:[`/ip4/0.0.0.0/tcp/${this.pftPort}`],
+        announce: this.announce ? [`/ip4/${this.ip4}/tcp/${this.pftPort}`] : [],
+
       },
       connectionManager: {
         minConnections: 1,
