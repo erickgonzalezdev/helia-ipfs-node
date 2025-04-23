@@ -234,7 +234,7 @@ class HeliaNode {
       const datastore = new this.FsDatastore(dataStorePath)
 
       const keyPair = await Libp2pCryptoKeys.generateKeyPairFromSeed('Ed25519', Buffer.from(options.nodeKey))
-
+      this.keyPair = keyPair
       const peerId = peerIdFromPrivateKey(keyPair)
       this.log(`Peer Id : ${peerId}`)
 

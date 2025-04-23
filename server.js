@@ -25,6 +25,9 @@ const serverDHTProvide = process.env.SERVER_DHT_PROVIDE // Start a DHT server to
 const role = process.env.ROLE || 'node' // 'node' 'pinner' 'delegator'
 const maxConnections = process.env.MAX_CONNECTIONS ? process.env.MAX_CONNECTIONS : 100
 const announceAddr = process.env.ANNOUNCE_ADDR ? process.env.ANNOUNCE_ADDR : ''
+const pftPort = process.env.PFT_PORT ? process.env.PFT_PORT : 4004
+const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
+
 //  Initialize A node with tools.
 const start = async () => {
   // Instantiate helia node.
@@ -50,7 +53,7 @@ const start = async () => {
   await rpc.start()
 
   // Instantiate PFT Protocol
-  const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic })
+  const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic, pftPort })
   await pft.start()
 
   // Instantiate Garbage Collector
@@ -58,6 +61,13 @@ const start = async () => {
   await gb.start()
 
   await node.helia.gc()
+
+  await node.connect(pinServiceAddress)
+  setInterval(async () => {
+    if (pinServiceAddress) {
+      await node.connect(pinServiceAddress)
+    }
+  }, 30000)
 }
 
 start()

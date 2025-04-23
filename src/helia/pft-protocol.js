@@ -11,23 +11,35 @@
 import { CID } from 'multiformats/cid'
 import { pipe } from 'it-pipe'
 import { multiaddr } from '@multiformats/multiaddr'
+import { tcp } from '@libp2p/tcp'
+import { noise } from '@chainsafe/libp2p-noise'
+import { yamux } from '@chainsafe/libp2p-yamux'
+import { ping } from '@libp2p/ping'
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import { identify } from '@libp2p/identify'
+import { logger, disable } from '@libp2p/logger'
+import { createLibp2p } from 'libp2p'
 
 class PFTProtocol {
   constructor (config = {}) {
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on PFTProtocol constructor')
     }
+    this.pftPort = config.pftPort || 4004
     this.protocol = '/pft/1.0.0'
     this.topic = config.topic
     this.node = config.node
+    this.selfAddress = null
     this.knownPeerAddress = config.knownPeerAddress
     this.knownPeerIsConnected = false
     this.knownPeerDisconnectedTimes = 0 // For log only
     this.log = this.node.log || console.log
     this.CID = CID
+    this.createLibp2p = createLibp2p
     this.pipe = pipe
     this.multiaddr = multiaddr
     // bind functions
+    this.instantiateLibp2p = this.instantiateLibp2p.bind(this)
     this.handlePFTProtocol = this.handlePFTProtocol.bind(this)
     this.fetchCidFromPeer = this.fetchCidFromPeer.bind(this)
     this.start = this.start.bind(this)
@@ -36,74 +48,107 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
+    // this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
     this.cleanKnownPeers = this.cleanKnownPeers.bind(this)
     this.handlePendingReconnects = this.handlePendingReconnects.bind(this)
+    this.connect = this.connect.bind(this)
+    this.publishKnownPeers = this.publishKnownPeers.bind(this)
+    this.startIntervals = this.startIntervals.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
     this.blackListAddresssStore = [] //  Save all addresses that failed to connect
     this.disconnectedPeerRecordsTime = {}
     this.pendingReconnects = []
-
-    this.notificationTimer = 6000
-    this.cleanKnownPeersTimer = 30000
-    this.logTimerInterval = 15000
+    this.libp2p = null
 
     // inject the downloadCid function to the provided node.
     this.node.pftpDownload = this.downloadCid
 
-    // renew connections timer
+    // rIntervals times
+    this.notificationTimer = 6000
+    this.cleanKnownPeersTimer = 30000
+    this.logTimerInterval = 15000
     this.renewInitialKnownPeerTimer = 10000
-    // this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-
-    this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
-
     this.pendingReconnectsInterval = 15000
-    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
   }
 
   async start () {
     this.log(`Starting on Private file transfer protocol ( PFTP) on protocol ${this.protocol}`)
-
+    await this.instantiateLibp2p()
     // add provided known peer to address store
-    this.addKnownPeer(this.knownPeerAddress)
-
+    const connected = await this.addKnownPeer(this.knownPeerAddress)
+    if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
     // handle pubsub
     this.listenPubsub()
-
     this.topicHandler()
-
     // handle protocol
-    this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
-
+    this.libp2p.handle(this.protocol, this.handlePFTProtocol)
     this.listenPeerDisconnections()
-    // await this.renewConnections()
 
-    this.nofitySubscriptionInterval = setInterval(async () => {
-      const msg = {
-        msgType: 'known-peers',
-        multiAddress: this.node.addresses[0],
-        knownPeers: this.getKnownPeers()
-      }
-      const msgStr = JSON.stringify(msg)
-      this.log('PFTP Sending addresses')
-      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
-    }, this.notificationTimer)
+    this.startIntervals()
+    return true
+  }
 
-    // Clean Black list every 2 minutes
+  startIntervals () {
+    this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
+    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
+    this.nofitySubscriptionInterval = setInterval(this.publishKnownPeers, this.notificationTimer)
     this.cleanPeerRecordsInterval = setInterval(this.cleanKnownPeers, this.cleanKnownPeersTimer)
-
     // Show known peers addresses every 10 seconds
     this.logPrivateAddresssStoreInterval = setInterval(() => {
       this.log('PFTP Known Peers addresses: ', this.privateAddresssStore)
       this.log(`Known peer disconnected times: ${this.knownPeerDisconnectedTimes}`)
     }, this.logTimerInterval)
 
-    return true
+    this.connectionsLogsInterval = setInterval(() => {
+      this.log('PFTP Connections: ', this.libp2p.getConnections()?.length)
+    }, 5000)
+  }
+
+  publishKnownPeers () {
+    const msg = {
+      msgType: 'known-peers',
+      multiAddress: this.selfAddress,
+      knownPeers: this.getKnownPeers()
+    }
+    const msgStr = JSON.stringify(msg)
+    this.log('PFTP Sending addresses')
+    this.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
+  }
+
+  async instantiateLibp2p () {
+    this.libp2p = await this.createLibp2p({
+      privateKey: this.node.keyPair,
+      addresses: {
+        listen: [`/ip4/0.0.0.0/tcp/${this.pftPort}`]
+      },
+      connectionManager: {
+        minConnections: 1,
+        autoDial: true
+      },
+      transports: [
+        tcp({ logger: logger('upgrade') })
+      ],
+      connectionEncrypters: [
+        noise()
+      ],
+      streamMuxers: [
+        yamux()
+      ],
+      services: {
+        identify: identify(),
+        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+        ping: ping()
+      },
+      logger: disable()
+    })
+    const multiaddrs = this.libp2p.getMultiaddrs()
+    this.selfAddress = multiaddrs[0].toString()
+    this.log('PFTP Multiaddrs: ', multiaddrs)
   }
 
   cleanKnownPeers () {
@@ -122,7 +167,7 @@ class PFTProtocol {
 
   listenPubsub () {
     try {
-      this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
+      this.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
       return true
     } catch (error) {
       this.log('Error on PFTP/listen()')
@@ -131,7 +176,7 @@ class PFTProtocol {
   }
 
   listenPeerDisconnections () {
-    this.node.helia.libp2p.addEventListener('peer:disconnect', async (evt) => {
+    this.libp2p.addEventListener('peer:disconnect', async (evt) => {
       try {
         const disconnectedPeerId = evt.detail.toString()
         // this.log('disconnectedPeerId', disconnectedPeerId)
@@ -166,7 +211,7 @@ class PFTProtocol {
     for (const address of this.pendingReconnects) {
       this.log(`\x1b[33mAttempting to reconnect to known peer: ${address}\x1b[0m`)
       try {
-        const connection = await this.node.connect(address)
+        const connection = await this.connect(address)
         this.log(`\x1b[33smSuccessfully reconnected to peer: ${connection.remoteAddr}\x1b[0m`)
         this.disconnectedPeerRecordsTime[address] = null
         // Remove from pending reconnects after successful reconnection
@@ -271,7 +316,7 @@ class PFTProtocol {
 
       // Add timeout to dial
 
-      stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
+      stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
       this.log('\x1b[32mStream established:\x1b[0m', stream.id)
 
       const encoder = new TextEncoder()
@@ -362,7 +407,7 @@ class PFTProtocol {
       if (this.blackListAddresssStore.includes(address)) {
         return false
       }
-      await this.node.connect(address)
+      await this.connect(address)
       if (address === this.knownPeerAddress) {
         this.knownPeerIsConnected = true
       }
@@ -400,37 +445,12 @@ class PFTProtocol {
     }
   }
 
-  /**
-   *
-   * This function is used to renew the connection to the initial known peer
-   * TODO :  verif if this function is needed due to the pending reconnects
-   */
-  async renewInitialKnownPeerConnection () {
-    try {
-      this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
-      if (!this.knownPeerAddress || this.knownPeerIsConnected) {
-        this.log('No known peer address or already connected to known peer')
-        return true
-      }
-      this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
-      clearInterval(this.reconnectInitialKnownPeerInterval)
-      await this.node.connect(this.knownPeerAddress)
-      this.knownPeerIsConnected = true
-      this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
-      this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
-      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-    } catch (error) {
-      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-      this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
-    }
-  }
-
   topicHandler () {
     try {
-      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(this.topic)
+      const isSubscribed = this.libp2p.services.pubsub.getTopics().includes(this.topic)
       this.log(`isSubscribed: ${isSubscribed}`)
       if (!isSubscribed) {
-        this.node.helia.libp2p.services.pubsub.subscribe(this.topic)
+        this.libp2p.services.pubsub.subscribe(this.topic)
         this.log(`Subcribed to : ${this.topic}`)
       }
       return true
@@ -439,6 +459,44 @@ class PFTProtocol {
       return false
     }
   }
+
+  // Dial to multiAddress
+  async connect (addr) {
+    try {
+      if (!addr) { throw new Error('addr is required!') }
+      // Connect to a node
+      const conection = await this.libp2p.dial(multiaddr(addr))
+      return conection
+    } catch (err) {
+      this.log('Error PFTP connect()  ', err.message)
+      throw err
+    }
+  }
+
+  /**
+   *
+   * This function is used to renew the connection to the initial known peer
+   * TODO :  verif if this function is needed due to the pending reconnects
+   */
+  /*   async renewInitialKnownPeerConnection() {
+      try {
+        this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
+        if (!this.knownPeerAddress || this.knownPeerIsConnected) {
+          this.log('No known peer address or already connected to known peer')
+          return true
+        }
+        this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
+        clearInterval(this.reconnectInitialKnownPeerInterval)
+        await this.connect(this.knownPeerAddress)
+        this.knownPeerIsConnected = true
+        this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
+        this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
+        this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+      } catch (error) {
+        this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
+        this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
+      }
+    } */
 }
 
 export default PFTProtocol
