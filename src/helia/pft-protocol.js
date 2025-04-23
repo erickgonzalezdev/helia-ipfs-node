@@ -144,9 +144,8 @@ class PFTProtocol {
       transports: [
         tcp({
           logger: logger('upgrade'),
-          timeout: 20000, // Connection timeout in ms
-          keepAlive: true,
-          noDelay: true
+          outboundSocketInactivityTimeout: 60000 * 30,
+          socketCloseTimeout: 30000 // Connection timeout in ms
         })
       ],
       connectionEncrypters: [
@@ -194,6 +193,7 @@ class PFTProtocol {
   listenPeerDisconnections () {
     this.libp2p.addEventListener('peer:disconnect', async (evt) => {
       try {
+        console.log('evt', evt)
         const disconnectedPeerId = evt.detail.toString()
         // this.log('disconnectedPeerId', disconnectedPeerId)
         // Check if disconnected peer is in our known peers list
