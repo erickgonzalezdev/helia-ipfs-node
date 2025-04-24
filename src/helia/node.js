@@ -461,12 +461,10 @@ class HeliaNode {
           ready = true
         }
       } while (!ready)
-
       this.downloading[cid] = {
         cid,
         timestamp: Date.now()
       }
-
       // console.log(stats)
       let chunkLength = 0
       while (chunkLength < Number(fileSize)) {

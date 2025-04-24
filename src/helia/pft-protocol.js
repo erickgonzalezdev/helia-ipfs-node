@@ -20,13 +20,6 @@ import { identify } from '@libp2p/identify'
 import { logger, disable } from '@libp2p/logger'
 import { createLibp2p } from 'libp2p'
 
-function concat (a, b) {
-  const c = new Uint8Array(a.length + b.length)
-  c.set(a, 0)
-  c.set(b, a.length)
-  return c
-}
-
 class PFTProtocol {
   constructor (config = {}) {
     if (!config.node) {
@@ -66,6 +59,8 @@ class PFTProtocol {
     this.connect = this.connect.bind(this)
     this.publishKnownPeers = this.publishKnownPeers.bind(this)
     this.startIntervals = this.startIntervals.bind(this)
+    this.listenConnectionClose = this.listenConnectionClose.bind(this)
+    this.renewKnownPeerConnection = this.renewKnownPeerConnection.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
@@ -82,7 +77,9 @@ class PFTProtocol {
     this.cleanKnownPeersTimer = 30000
     this.logTimerInterval = 15000
     this.renewInitialKnownPeerTimer = 10000
-    this.pendingReconnectsInterval = 15000
+    this.renewConnectionsInterval = 15000
+
+    this.renewKnownPeerConnectionRunning = false
   }
 
   async start () {
@@ -96,15 +93,15 @@ class PFTProtocol {
     this.topicHandler()
     // handle protocol
     this.libp2p.handle(this.protocol, this.handlePFTProtocol)
-    this.listenPeerDisconnections()
-
+    // this.listenPeerDisconnections()
+    this.listenConnectionClose()
     this.startIntervals()
     return true
   }
 
   startIntervals () {
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
-    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
+    this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
     this.nofitySubscriptionInterval = setInterval(this.publishKnownPeers, this.notificationTimer)
     this.cleanPeerRecordsInterval = setInterval(this.cleanKnownPeers, this.cleanKnownPeersTimer)
     // Show known peers addresses every 10 seconds
@@ -191,7 +188,7 @@ class PFTProtocol {
   }
 
   listenPeerDisconnections () {
-    this.libp2p.addEventListener('peer:disconnect', async (evt) => {
+    this.libp2p.addEventListener('connection:close', async (evt) => {
       try {
         console.log('evt', evt)
         const disconnectedPeerId = evt.detail.toString()
@@ -218,6 +215,13 @@ class PFTProtocol {
     })
   }
 
+  listenConnectionClose () {
+    this.libp2p.addEventListener('connection:close', async (evt) => {
+      this.log('\x1b[33mPFTP Connection closed with peer: ' + evt.detail.remoteAddr.toString() + '\x1b[0m')
+      await this.renewKnownPeerConnection()
+    })
+  }
+
   async handlePendingReconnects () {
     if (this.pendingReconnects.length === 0) {
       return
@@ -241,6 +245,25 @@ class PFTProtocol {
       }
     }
     this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
+  }
+
+  async renewKnownPeerConnection () {
+    this.log('try renewKnownPeerConnection')
+    if (this.renewKnownPeerConnectionRunning) {
+      this.log('renewKnownPeerConnection already running')
+      return
+    }
+    this.log('renewKnownPeerConnection running')
+    this.renewKnownPeerConnectionRunning = true
+    for (const address of this.privateAddresssStore) {
+      try {
+        await this.connect(address)
+        this.log(`\x1b[33mSuccessfully reconnected to peer: ${address}\x1b[0m`)
+      } catch (error) {
+        this.log(`\x1b[31mFailed to reconnect to ${address}: ${error.message}\x1b[0m`)
+      }
+    }
+    this.renewKnownPeerConnectionRunning = false
   }
 
   handlePubsubMsg (message = {}) {
@@ -278,20 +301,21 @@ class PFTProtocol {
     try {
       this.log('\x1b[32mNew PFT connection request.\x1b[0m')
       const decoder = new TextDecoder()
+      const encoder = new TextEncoder()
       const source = stream.source
       const sink = stream.sink
 
-      // Validate CID with timeout
+      // Get requested CID and optional byte range
       const cidChunks = []
 
       for await (const chunk of source) {
-        cidChunks.push(decoder.decode(chunk.bufs[0]))
+        const data = JSON.parse(decoder.decode(chunk.bufs[0]))
+        if (data.cid) cidChunks.push(data.cid)
       }
 
       const cid = cidChunks.join('')
-      this.log(`\x1b[32mPFT connection requesting cid: ${cid}\x1b[0m`)
 
-      // Validate CID format
+      // Validate CID format and existence
       if (!cid || typeof cid !== 'string') {
         throw new Error('Invalid CID format')
       }
@@ -300,31 +324,22 @@ class PFTProtocol {
       const has = await this.node.helia.blockstore.has(parsedCID)
 
       if (!has) {
+        await stream.sink([encoder.encode(JSON.stringify({ error: 'CID_NOT_FOUND' }))])
         throw new Error(`CID ${cid} not found in blockstore`)
       }
 
+      const stats = await this.node.getStat(cid)
+      const fileSize = Number(stats.fileSize)
+
       const fileStream = await this.node.ufs.cat(cid)
 
-      // Add chunking and size limits
-      await this.pipe(
+      await pipe(
         fileStream,
-        // Enhanced transform function with better chunking and backpressure handling
         async function * (source) {
-          const CHUNK_SIZE = 1024 * 1024 // 1MB chunks
-          let buffer = new Uint8Array(0)
+          yield encoder.encode(JSON.stringify({ fileSize }))
 
           for await (const chunk of source) {
-            buffer = concat(buffer, chunk)
-            // console.log('buffer', buffer.length)
-            while (buffer.length >= CHUNK_SIZE) {
-              yield buffer.slice(0, CHUNK_SIZE)
-              buffer = buffer.slice(CHUNK_SIZE)
-            }
-          }
-
-          // Send any remaining data
-          if (buffer.length > 0) {
-            yield buffer
+            yield chunk
           }
         },
         sink
@@ -351,56 +366,69 @@ class PFTProtocol {
     }
 
     let stream
-    try {
-      this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
+    let retryCount = 0
+    const MAX_RETRIES = 5
+    let fileSize = 0
 
-      // Add timeout to dial
+    while (retryCount < MAX_RETRIES) {
+      try {
+        this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
 
-      stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
-      this.log('\x1b[32mStream established:\x1b[0m', stream.id)
+        stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol, { signal: AbortSignal.timeout(10000) })
+        this.log('\x1b[32mStream established:\x1b[0m', stream.id)
 
-      const encoder = new TextEncoder()
-      await stream.sink([encoder.encode(cid)])
+        const encoder = new TextEncoder()
+        await stream.sink([encoder.encode(JSON.stringify({ cid }))])
 
-      // Add timeout for receiving data
-      const receivedData = []
-      /*     const receiveTimeout = setTimeout(() => {
-        throw new Error('Data reception timeout')
-      }, 60000) */
+        let hasCidMsgErr = ''
+        let message
 
-      for await (const chunk of stream.source) {
-        receivedData.push(chunk.subarray())
-      }
-      // clearTimeout(receiveTimeout)
+        const cidAdded = await this.node.ufs.addBytes(async function * () {
+          for await (const chunk of stream.source) {
+            try {
+              if (!message) {
+                message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
+                console.log('message', message)
+                hasCidMsgErr = message.error
+                fileSize = message.fileSize
+                if (hasCidMsgErr) throw new Error(hasCidMsgErr)
+              } else { throw new Error('No message received') }
+              continue
+            } catch (err) {
+              yield chunk.subarray()
+            }
+          }
+        }())
 
-      const cidAdded = await this.node.ufs.addBytes(async function * () {
-        for (const chunk of receivedData) {
-          yield chunk
+        this.log('cidAdded', cidAdded)
+
+        const has = await this.node.helia.blockstore.has(CID.parse(cid))
+        if (!has) { throw new Error('Download failed') }
+
+        this.log('Successfully downloaded and verified CID:', cid)
+        return true
+      } catch (error) {
+        this.log(`\x1b[31mError in fetchCidFromPeer (attempt ${retryCount + 1}): \x1b[0m`, error)
+        retryCount++
+
+        if (retryCount >= MAX_RETRIES) {
+          this.log('\x1b[31mMax retries reached, giving up\x1b[0m')
+          return false
         }
-      }())
 
-      if (cidAdded.toString() !== cid.toString()) {
-        throw new Error(`CID mismatch: expected ${cid}, got ${cidAdded}`)
-      }
-
-      this.log('Successfully downloaded and verified CID:', cid)
-      return true
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        this.log('\x1b[31mTimeout reached while downloading CID\x1b[0m')
-      } else {
-        this.log('\x1b[31mError in fetchCidFromPeer(): \x1b[0m', error)
-      }
-      // Add peer to blacklist after multiple failures
-      return false
-    } finally {
-      if (stream) {
-        await stream.close().catch(err => {
-          this.log('\x1b[31mError closing stream:\x1b[0m', err)
-        })
-        this.log('\x1b[31mfetchCidFromPeer closed stream\x1b[0m')
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 3000 * retryCount))
+      } finally {
+        if (stream) {
+          await stream.close().catch(err => {
+            this.log('\x1b[31mError closing stream:\x1b[0m', err)
+          })
+          this.log('\x1b[31mfetchCidFromPeer closed stream\x1b[0m')
+        }
       }
     }
+
+    return false
   }
 
   async downloadCid (cid) {
@@ -415,11 +443,13 @@ class PFTProtocol {
 
       for (const address of this.privateAddresssStore) {
         const result = await this.fetchCidFromPeer(cid, address)
-        // console.log('result', result)
+        console.log(`downloadCid fetch addr${address} result ${result}`)
         if (result) {
+          console.log('CID found on PFTP')
           return true
         }
       }
+      console.log('NOT CID found on PFTP')
       return false
     } catch (error) {
       this.log('Error in downloadCid(): ', error)
