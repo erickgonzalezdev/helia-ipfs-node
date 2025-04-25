@@ -19,6 +19,9 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { identify } from '@libp2p/identify'
 import { logger, disable } from '@libp2p/logger'
 import { createLibp2p } from 'libp2p'
+import { importer } from 'ipfs-unixfs-importer'
+import { fixedSize } from 'ipfs-unixfs-importer/chunker'
+import { balanced } from 'ipfs-unixfs-importer/layout'
 
 class PFTProtocol {
   constructor (config = {}) {
@@ -307,10 +310,11 @@ class PFTProtocol {
 
       // Get requested CID and optional byte range
       const cidChunks = []
-
+      let startBytes = 0
       for await (const chunk of source) {
         const data = JSON.parse(decoder.decode(chunk.bufs[0]))
         if (data.cid) cidChunks.push(data.cid)
+        if (data.startBytes) startBytes = data.startBytes
       }
 
       const cid = cidChunks.join('')
@@ -336,10 +340,27 @@ class PFTProtocol {
       await pipe(
         fileStream,
         async function * (source) {
-          yield encoder.encode(JSON.stringify({ fileSize }))
+          yield encoder.encode(JSON.stringify({
+            fileSize,
+            startBytes
+          }))
 
+          let bytesRead = 0
           for await (const chunk of source) {
-            yield chunk
+            // Skip chunks until we reach startBytes
+            if (bytesRead < startBytes) {
+              if (bytesRead + chunk.length <= startBytes) {
+                bytesRead += chunk.length
+                continue
+              }
+              // If chunk crosses startBytes boundary, slice it
+              const remainingBytes = chunk.slice(startBytes - bytesRead)
+              bytesRead += chunk.length
+              yield remainingBytes
+            } else {
+              bytesRead += chunk.length
+              yield chunk
+            }
           }
         },
         sink
@@ -369,6 +390,8 @@ class PFTProtocol {
     let retryCount = 0
     const MAX_RETRIES = 5
     let fileSize = 0
+    let totalDownloadedSize = 0
+    const chunkCIDs = []
 
     while (retryCount < MAX_RETRIES) {
       try {
@@ -378,29 +401,62 @@ class PFTProtocol {
         this.log('\x1b[32mStream established:\x1b[0m', stream.id)
 
         const encoder = new TextEncoder()
-        await stream.sink([encoder.encode(JSON.stringify({ cid }))])
+        await stream.sink([encoder.encode(JSON.stringify({ cid, startBytes: totalDownloadedSize }))])
 
         let hasCidMsgErr = ''
         let message
-
-        const cidAdded = await this.node.ufs.addBytes(async function * () {
-          for await (const chunk of stream.source) {
-            try {
-              if (!message) {
-                message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
-                console.log('message', message)
-                hasCidMsgErr = message.error
-                fileSize = message.fileSize
-                if (hasCidMsgErr) throw new Error(hasCidMsgErr)
-              } else { throw new Error('No message received') }
-              continue
-            } catch (err) {
-              yield chunk.subarray()
-            }
+        const node = this.node
+        for await (const chunk of stream.source) {
+          try {
+            if (!message) {
+              message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
+              console.log('message', message)
+              hasCidMsgErr = message.error
+              fileSize = message.fileSize
+              totalDownloadedSize = message.startBytes || 0
+              if (hasCidMsgErr) throw new Error(hasCidMsgErr)
+            } else { throw new Error('No message received') }
+            continue
+          } catch (err) {
+            // console.log('put chunk', cid)
+            // await node.helia.blockstore.put(CID.parse(cid), chunk.subarray())
+            const res = await node.ufs.addFile({ content: chunk.subarray() })
+            totalDownloadedSize += chunk.subarray().length
+            chunkCIDs.push(res)
+            // const percentage = ((totalDownloadedSize / fileSize) * 100).toFixed(2)
+            // console.log('\x1b[36mTotal Downloaded Size:\x1b[0m', `\x1b[33m${totalDownloadedSize}\x1b[0m`, `\x1b[32m(${percentage}%)\x1b[0m`)
+            // yield chunk.subarray()
           }
-        }())
+        }
+        // Necesitamos crear input que el `importer` entienda como archivo
+        const fileInput = {
+          path: 'composed-file',
+          content: (async function * () {
+            for (const cid of chunkCIDs) {
+              const block = await node.helia.blockstore.get(cid)
+              yield block
+            }
+          })()
+        }
+        const entries = importer([fileInput], node.helia.blockstore, {
+          cidVersion: 1,
+          rawLeaves: true,
+          layout: balanced({
+            maxChildrenPerNode: 1024
+          }),
+          chunker: fixedSize({
+            chunkSize: 1048576
+          })
+        })
 
-        this.log('cidAdded', cidAdded)
+        let finalCID
+        for await (const entry of entries) {
+          if (entry.path === 'composed-file') {
+            finalCID = entry.cid
+          }
+        }
+        this.log('File size', fileSize)
+        this.log('finalCID', finalCID)
 
         const has = await this.node.helia.blockstore.has(CID.parse(cid))
         if (!has) { throw new Error('Download failed') }
