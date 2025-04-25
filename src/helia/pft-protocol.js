@@ -473,7 +473,7 @@ class PFTProtocol {
         }
 
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 3000 * retryCount))
+        await new Promise(resolve => setTimeout(resolve, 2000 * retryCount))
       } finally {
         if (stream) {
           await stream.close().catch(err => {

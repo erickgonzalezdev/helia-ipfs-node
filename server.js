@@ -62,6 +62,7 @@ const start = async () => {
 
   await node.helia.gc()
   try { await node.connect(pinServiceAddress) } catch (error) {}
+
   setInterval(async () => {
     if (pinServiceAddress) {
       try {
@@ -70,7 +71,7 @@ const start = async () => {
         console.log('Error connecting to pin service', error)
       }
     }
-  }, 30000)
+  }, 20000)
 }
 
 start()
