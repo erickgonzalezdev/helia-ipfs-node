@@ -82,7 +82,7 @@ class PFTProtocol {
     this.logTimerInterval = 15000
     this.renewInitialKnownPeerTimer = 10000
     this.renewConnectionsInterval = 60000 * 1
-    this.restartNodeTime = 60000 * 1
+    this.restartNodeTime = 60000 * 30 // 30 minutes
   }
 
   async start () {
