@@ -174,7 +174,9 @@ class HeliaNode {
           : []
       },
       connectionManager: {
-        maxConnections: this.opts.maxConnections || 50
+        maxConnections: this.opts.maxConnections || 50,
+        minConnections: this.opts.maxConnections ? this.opts.maxConnections * 0.5 : 10
+
       },
       transports: [
         tcp({ logger: logger('upgrade') }),
@@ -202,13 +204,14 @@ class HeliaNode {
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
           clientMode: !this.opts.serverDHTProvide,
-          queryTimeout: 20000, // 20 seconds
-          protocolPrefix: '/ipfs', // Standard prefix for IPFS DHT
-          reprovide: this.opts.serverDHTProvide
+          queryTimeout: 30000, // 30 seconds
+          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
+          /*     reprovide: this.opts.serverDHTProvide
             ? {
-                concurrency: 10
+                concurrency: 5,
+                interval: 10000
               }
-            : false
+            : false */
         })
       },
       logger: disable()
@@ -249,6 +252,7 @@ class HeliaNode {
       this.log(`MAX CONNECTIONS : ${this.opts.maxConnections}`)
 
       const libp2p = await this.createLibp2p(libp2pInputs)
+      await libp2p.services.dht.reprovider.stop()
 
       this.peerId = peerId
       // Create helia node
@@ -633,7 +637,7 @@ class HeliaNode {
     }
   }
 
-  async provideCID (cid, options) {
+  async provideCID (cid, options = {}) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')

@@ -53,17 +53,18 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    this.renewInitialKnownPeerConnection = this.renewInitialKnownPeerConnection.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
-    this.listenPeerDisconnections = this.listenPeerDisconnections.bind(this)
     this.cleanKnownPeers = this.cleanKnownPeers.bind(this)
-    this.handlePendingReconnects = this.handlePendingReconnects.bind(this)
     this.connect = this.connect.bind(this)
     this.publishKnownPeers = this.publishKnownPeers.bind(this)
     this.startIntervals = this.startIntervals.bind(this)
     this.listenConnectionClose = this.listenConnectionClose.bind(this)
     this.renewKnownPeerConnection = this.renewKnownPeerConnection.bind(this)
+    this.disconnect = this.disconnect.bind(this)
+    this.retryConnect = this.retryConnect.bind(this)
+    this.restartNode = this.restartNode.bind(this)
+    this.sleep = this.sleep.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
@@ -80,9 +81,8 @@ class PFTProtocol {
     this.cleanKnownPeersTimer = 30000
     this.logTimerInterval = 15000
     this.renewInitialKnownPeerTimer = 10000
-    this.renewConnectionsInterval = 15000
-
-    this.renewKnownPeerConnectionRunning = false
+    this.renewConnectionsInterval = 60000 * 1
+    this.restartNodeTime = 60000 * 1
   }
 
   async start () {
@@ -116,6 +116,8 @@ class PFTProtocol {
     this.connectionsLogsInterval = setInterval(() => {
       this.log('PFTP Connections: ', this.libp2p.getConnections()?.length)
     }, 5000)
+
+    this.restartNodeInterval = setInterval(this.restartNode, this.restartNodeTime)
   }
 
   publishKnownPeers () {
@@ -190,83 +192,50 @@ class PFTProtocol {
     }
   }
 
-  listenPeerDisconnections () {
-    this.libp2p.addEventListener('connection:close', async (evt) => {
-      try {
-        console.log('evt', evt)
-        const disconnectedPeerId = evt.detail.toString()
-        // this.log('disconnectedPeerId', disconnectedPeerId)
-        // Check if disconnected peer is in our known peers list
-        for (const address of this.privateAddresssStore) {
-          if (address.includes(disconnectedPeerId)) {
-            if (this.pendingReconnects.includes(address)) {
-              continue
-            }
-            this.log(`\x1b[33mDisconnected known peer: ${disconnectedPeerId}\x1b[0m`)
-            this.pendingReconnects.push(address)
-            this.disconnectedPeerRecordsTime[address] = new Date().getTime()
-            if (address === this.knownPeerAddress) {
-              this.knownPeerIsConnected = false
-              this.knownPeerDisconnectedTimes += 1
-            }
-            break
-          }
-        }
-      } catch (error) {
-        this.log('Error on PFTP/listenPeerDisconnections()', error)
-      }
-    })
-  }
-
   listenConnectionClose () {
     this.libp2p.addEventListener('connection:close', async (evt) => {
-      this.log('\x1b[33mPFTP Connection closed with peer: ' + evt.detail.remoteAddr.toString() + '\x1b[0m')
-      await this.renewKnownPeerConnection()
-    })
-  }
+      const closedPeerAddr = evt.detail.remoteAddr.toString()
 
-  async handlePendingReconnects () {
-    if (this.pendingReconnects.length === 0) {
-      return
-    }
-    this.log(`\x1b[33mPendings ${this.pendingReconnects.length} reconnects`)
-    clearInterval(this.handlePendingReconnectsInterval)
-    for (const address of this.pendingReconnects) {
-      this.log(`\x1b[33mAttempting to reconnect to known peer: ${address}\x1b[0m`)
-      try {
-        const connection = await this.connect(address)
-        this.log(`\x1b[33smSuccessfully reconnected to peer: ${connection.remoteAddr}\x1b[0m`)
-        this.disconnectedPeerRecordsTime[address] = null
-        // Remove from pending reconnects after successful reconnection
-        this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== address)
+      // Check if the closed connection was with a known peer
+      if (this.privateAddresssStore.includes(closedPeerAddr)) {
+        this.log(`\x1b[32m Known peer disconnected: ${closedPeerAddr}\x1b[0m`)
 
-        if (address === this.knownPeerAddress) {
-          this.knownPeerIsConnected = true
+        // Record disconnection time
+        this.disconnectedPeerRecordsTime[closedPeerAddr] = new Date().getTime()
+
+        if (closedPeerAddr === this.knownPeerAddress) {
+          this.knownPeerIsConnected = false
+          this.knownPeerDisconnectedTimes++
         }
-      } catch (error) {
-        this.log(`\x1b[31mFailed to reconnect to ${address}: ${error.message}\x1b[0m`)
+
+        // Attempt immediate reconnection
+        try {
+          this.retryConnect(closedPeerAddr, 1)
+          this.log(`\x1b[32mSuccessfully reconnected to peer: ${closedPeerAddr}\x1b[0m`)
+          delete this.disconnectedPeerRecordsTime[closedPeerAddr]
+        } catch (error) {
+          this.log(`\x1b[31mFailed to reconnect to ${closedPeerAddr}: ${error.message}\x1b[0m`)
+        }
       }
-    }
-    this.handlePendingReconnectsInterval = setInterval(this.handlePendingReconnects, this.pendingReconnectsInterval)
+    })
   }
 
   async renewKnownPeerConnection () {
-    this.log('try renewKnownPeerConnection')
-    if (this.renewKnownPeerConnectionRunning) {
-      this.log('renewKnownPeerConnection already running')
-      return
-    }
-    this.log('renewKnownPeerConnection running')
-    this.renewKnownPeerConnectionRunning = true
-    for (const address of this.privateAddresssStore) {
-      try {
-        await this.connect(address)
-        this.log(`\x1b[33mSuccessfully reconnected to peer: ${address}\x1b[0m`)
-      } catch (error) {
-        this.log(`\x1b[31mFailed to reconnect to ${address}: ${error.message}\x1b[0m`)
+    try {
+      clearInterval(this.handleReconnectsInterval)
+      for (const address of this.privateAddresssStore) {
+        try {
+          // this disconnection trigger the connection close event, then try to reconnect and renew the connection
+          await this.connect(address)
+          this.log(`\x1b[33mSuccessfully reconnected to peer: ${address}\x1b[0m`)
+        } catch (error) {
+          this.log(`\x1b[31mFailed to reconnect to ${address}: ${error.message}\x1b[0m`)
+        }
       }
+      this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+    } catch (error) {
+      this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
     }
-    this.renewKnownPeerConnectionRunning = false
   }
 
   handlePubsubMsg (message = {}) {
@@ -336,6 +305,7 @@ class PFTProtocol {
       const fileSize = Number(stats.fileSize)
 
       const fileStream = await this.node.ufs.cat(cid)
+      const MAX_CHUNK_SIZE = 10 ** 6
 
       await pipe(
         fileStream,
@@ -347,19 +317,27 @@ class PFTProtocol {
 
           let bytesRead = 0
           for await (const chunk of source) {
-            // Skip chunks until we reach startBytes
+            let offset = 0
+            let buffer = chunk
+
+            // Saltar datos hasta llegar a startBytes
             if (bytesRead < startBytes) {
               if (bytesRead + chunk.length <= startBytes) {
                 bytesRead += chunk.length
                 continue
               }
-              // If chunk crosses startBytes boundary, slice it
-              const remainingBytes = chunk.slice(startBytes - bytesRead)
+              const skip = startBytes - bytesRead
+              buffer = chunk.slice(skip)
               bytesRead += chunk.length
-              yield remainingBytes
             } else {
               bytesRead += chunk.length
-              yield chunk
+            }
+
+            // Fragmentar el chunk en partes más pequeñas
+            while (offset < buffer.length) {
+              const end = Math.min(offset + MAX_CHUNK_SIZE, buffer.length)
+              yield buffer.slice(offset, end)
+              offset = end
             }
           }
         },
@@ -397,7 +375,7 @@ class PFTProtocol {
       try {
         this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
 
-        stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol, { signal: AbortSignal.timeout(10000) })
+        stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol, { signal: AbortSignal.timeout(15000) })
         this.log('\x1b[32mStream established:\x1b[0m', stream.id)
 
         const encoder = new TextEncoder()
@@ -473,7 +451,7 @@ class PFTProtocol {
         }
 
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 2000 * retryCount))
+        await new Promise(resolve => setTimeout(resolve, 2500 * retryCount))
       } finally {
         if (stream) {
           await stream.close().catch(err => {
@@ -599,29 +577,57 @@ class PFTProtocol {
     }
   }
 
-  /**
-   *
-   * This function is used to renew the connection to the initial known peer
-   * TODO :  verif if this function is needed due to the pending reconnects
-   */
-  async renewInitialKnownPeerConnection () {
+  // Dial to multiAddress
+  async disconnect (addr) {
     try {
-      this.log(`Known peer is connected: ${this.knownPeerIsConnected}`)
-      if (!this.knownPeerAddress || this.knownPeerIsConnected) {
-        this.log('No known peer address or already connected to known peer')
-        return true
-      }
-      this.log(`Attempting to connect to known peer: ${this.knownPeerAddress}`)
-      clearInterval(this.reconnectInitialKnownPeerInterval)
-      await this.connect(this.knownPeerAddress)
-      this.knownPeerIsConnected = true
-      this.log(`Successfully connected to peer: ${this.knownPeerAddress}`)
-      this.pendingReconnects = this.pendingReconnects.filter(addr => addr !== this.knownPeerAddress)
-      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-    } catch (error) {
-      this.reconnectInitialKnownPeerInterval = setInterval(this.renewInitialKnownPeerConnection, this.renewInitialKnownPeerTimer)
-      this.log('Error in PFTProtocol/renewInitialKnownPeerConnection()', error.message)
+      if (!addr) { throw new Error('addr is required!') }
+      // Connect to a node
+      await this.libp2p.hangUp(multiaddr(addr))
+      return true
+    } catch (err) {
+      this.log('Error PFTP connect()  ', err.message)
+      throw err
     }
+  }
+
+  async retryConnect (addr, attempt = 1) {
+    const MAX_ATTEMPTS = 5
+    const RETRY_DELAY = 2000 // 1 minute in milliseconds
+
+    try {
+      // Attempt to connect to the node
+      const connection = await this.connect(addr)
+      this.log(`\x1b[32mSuccessfully connected to ${addr} on attempt ${attempt}\x1b[0m`)
+      return connection
+    } catch (error) {
+      this.log(`\x1b[33mFailed to connect to ${addr} (attempt ${attempt}/${MAX_ATTEMPTS}): ${error.message}\x1b[0m`)
+
+      if (attempt >= MAX_ATTEMPTS) {
+        this.log(`\x1b[31mMax attempts (${MAX_ATTEMPTS}) reached. Giving up.\x1b[0m`)
+        throw new Error(`Failed to connect after ${MAX_ATTEMPTS} attempts`)
+      }
+
+      // Wait for RETRY_DELAY before next attempt
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+
+      // Recursive call for next attempt
+      return this.retryConnect(addr, attempt + 1)
+    }
+  }
+
+  async restartNode () {
+    console.log('\x1b[33mRestarting node\x1b[0m')
+    await this.libp2p.stop()
+    console.log('\x1b[33mNode stopped\x1b[0m')
+    await this.sleep(5000)
+    await this.start()
+    console.log('\x1b[33mNode restarted\x1b[0m')
+    await this.renewKnownPeerConnection()
+  }
+
+  // Add sleep utility function
+  async sleep (ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 }
 
