@@ -14,6 +14,7 @@ export default class Gateway {
     this.setHelloWorld = this.setHelloWorld.bind(this)
     this.getConnections = this.getConnections.bind(this)
     this.log = this.node.log || console.log
+    this.downloadContent = this.downloadContent.bind(this)
   }
 
   async getContent (ctx) {
@@ -51,6 +52,50 @@ export default class Gateway {
       const streamed = await this.streamContent(ctx, cidToFetch)
       console.log('streamed', streamed)
       if (streamed) return
+
+      // Send all content
+      const totalFileChunks = await this.node.getContent(cidToFetch, { offset: 0, length: fileSize })
+      const fileTypeRes = await fileTypeFromBuffer(totalFileChunks)
+      const fileType = fileTypeRes || { mime: 'text/plain' }
+
+      ctx.type = fileType.mime
+      ctx.body = totalFileChunks
+    } catch (error) {
+      console.log(error)
+      this.handleError(ctx, error)
+    }
+  }
+
+  async downloadContent (ctx) {
+    try {
+      const { cid } = ctx.params
+      // try to download the cid on the private nerwork first
+      await this.node.pftpDownload(cid)
+
+      let cidToFetch = cid
+      // Verify if the cid is a folder
+      const parsed = await this.parseFolderFormat(ctx)
+
+      // If a result was sent.
+      if (parsed && !parsed.cid) return
+
+      // If new cid exist
+      if (parsed.cid) cidToFetch = parsed.cid
+      console.log('cidToFetch', cidToFetch)
+
+      // Get file stats
+      const stats = await this.node.getStat(cidToFetch)
+
+      const fileSize = Number(stats.fileSize)
+      this.log(`${cidToFetch} fileSize : ${fileSize}`)
+      const localSize = Number(stats.localFileSize)
+      this.log(`${cidToFetch} localSize : ${localSize}`)
+
+      // Try to download the content before send it.
+      if (localSize < fileSize) {
+        this.log(`Node Lazy Downloading for ${cidToFetch}`)
+        await this.node.lazyDownload(cidToFetch)
+      }
 
       // Send all content
       const totalFileChunks = await this.node.getContent(cidToFetch, { offset: 0, length: fileSize })

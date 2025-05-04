@@ -22,11 +22,13 @@ import { createLibp2p } from 'libp2p'
 import { importer } from 'ipfs-unixfs-importer'
 import { fixedSize } from 'ipfs-unixfs-importer/chunker'
 import { balanced } from 'ipfs-unixfs-importer/layout'
+import { pipeline } from 'stream/promises'
+import axios from 'axios'
 
 const MAX_CHUNK_SIZE = 256 * 1024 // 256KB chunks
 
 class PFTProtocol {
-  constructor(config = {}) {
+  constructor (config = {}) {
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on PFTProtocol constructor')
     }
@@ -65,8 +67,11 @@ class PFTProtocol {
     this.renewKnownPeerConnection = this.renewKnownPeerConnection.bind(this)
     this.disconnect = this.disconnect.bind(this)
     this.retryConnect = this.retryConnect.bind(this)
-    //this.restartNode = this.restartNode.bind(this)
+    // this.restartNode = this.restartNode.bind(this)
     this.sleep = this.sleep.bind(this)
+
+    this.getGatewayByRemoteAddress = this.getGatewayByRemoteAddress.bind(this)
+    this.downloadFromGateway = this.downloadFromGateway.bind(this)
 
     this.privateAddresssStore = [] // Save al known peers for private connections
 
@@ -87,7 +92,7 @@ class PFTProtocol {
     this.restartNodeTime = 60000 * 0.5 // 30 minutes
   }
 
-  async start() {
+  async start () {
     this.log(`Starting on Private file transfer protocol ( PFTP) on protocol ${this.protocol}`)
     await this.instantiateLibp2p()
     // add provided known peer to address store
@@ -104,7 +109,7 @@ class PFTProtocol {
     return true
   }
 
-  startIntervals() {
+  startIntervals () {
     console.log('startIntervals')
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
     this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
@@ -121,10 +126,10 @@ class PFTProtocol {
     }, 5000)
 
     setInterval(() => {
-      const mem = process.memoryUsage();
-      //console.log('mem', mem)
-      console.log(`\x1b[33mRSS: ${(mem.rss / 1024 / 1024).toFixed(2)} MB\x1b[0m`);
-    }, 1000);
+      const mem = process.memoryUsage()
+      // console.log('mem', mem)
+      console.log(`\x1b[33mRSS: ${(mem.rss / 1024 / 1024).toFixed(2)} MB\x1b[0m`)
+    }, 1000)
 
     setInterval(() => {
       // Force garbage collection (if available)
@@ -134,11 +139,10 @@ class PFTProtocol {
       } else {
         console.log('no garbage collection')
       }
-    }, 3000);
-
+    }, 3000)
   }
 
-  publishKnownPeers() {
+  publishKnownPeers () {
     const msg = {
       msgType: 'known-peers',
       multiAddress: this.selfAddress,
@@ -149,7 +153,7 @@ class PFTProtocol {
     this.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
   }
 
-  async instantiateLibp2p() {
+  async instantiateLibp2p () {
     this.libp2p = await this.createLibp2p({
       privateKey: this.node.keyPair,
       addresses: {
@@ -186,7 +190,7 @@ class PFTProtocol {
     this.log('PFTP Multiaddrs: ', multiaddrs)
   }
 
-  cleanKnownPeers() {
+  cleanKnownPeers () {
     for (const address of this.privateAddresssStore) {
       const disconnectedTime = this.disconnectedPeerRecordsTime[address]
       if (disconnectedTime) {
@@ -200,7 +204,7 @@ class PFTProtocol {
     }
   }
 
-  listenPubsub() {
+  listenPubsub () {
     try {
       this.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
       return true
@@ -210,7 +214,7 @@ class PFTProtocol {
     }
   }
 
-  listenConnectionClose() {
+  listenConnectionClose () {
     this.libp2p.addEventListener('connection:close', async (evt) => {
       const closedPeerAddr = evt.detail.remoteAddr.toString()
 
@@ -238,7 +242,7 @@ class PFTProtocol {
     })
   }
 
-  async renewKnownPeerConnection() {
+  async renewKnownPeerConnection () {
     try {
       clearInterval(this.handleReconnectsInterval)
       for (const address of this.privateAddresssStore) {
@@ -256,7 +260,7 @@ class PFTProtocol {
     }
   }
 
-  handlePubsubMsg(message = {}) {
+  handlePubsubMsg (message = {}) {
     try {
       this.log('PFTP message received')
       if (message && message.detail) {
@@ -281,8 +285,8 @@ class PFTProtocol {
       return false
     }
   }
- 
-  async handlePFTProtocol({ stream }) {
+
+  /* async handlePFTProtocol({ stream }) {
     if (!stream) {
       this.log('Error: No stream provided')
       return false
@@ -292,6 +296,7 @@ class PFTProtocol {
     let source = null
     let sink = null
     let reader = null
+    let pipePromise = null
 
     const decoder = new TextDecoder()
     const encoder = new TextEncoder()
@@ -335,12 +340,12 @@ class PFTProtocol {
         chunkSize: MAX_CHUNK_SIZE
       })
 
-      await pipe(
+      pipePromise = pipe(
         fileStream,
         async function * (source) {
           // Send metadata as first chunk
           yield encoder.encode(JSON.stringify({ fileSize, startBytes }))
-          
+
           let bytesRead = 0
           for await (const chunk of source) {
             if (bytesRead < startBytes) {
@@ -357,8 +362,10 @@ class PFTProtocol {
             }
           }
         },
-        sink
+        sink,
       )
+
+      await pipePromise
 
       this.log('\x1b[32mPFT connection request successful.\x1b[0m')
     } catch (error) {
@@ -386,138 +393,263 @@ class PFTProtocol {
       sink = null
       stream = null
       fileStream = null
+      pipePromise = null
+    }
+  } */
+
+  /*   async fetchCidFromPeer (cid, address) {
+      if (!cid || !address) {
+        throw new Error('CID and address are required')
+      }
+
+      let stream = null;
+      let retryCount = 0;
+      const MAX_RETRIES = 5;
+      let fileSize = 0;
+      let totalDownloadedSize = 0;
+      const chunkCIDs = [];
+      let encoder = null;
+      let message = null;
+      let hasCidMsgErr = '';
+      let finalCID = null;
+      let entries = null;
+      let sink = null;
+      let fileInput = null;
+      let node =  this.node
+
+      while (retryCount < MAX_RETRIES) {
+        try {
+          this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
+
+          stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol, { signal: AbortSignal.timeout(15000) })
+          this.log('\x1b[32mStream established:\x1b[0m', stream.id)
+
+          sink = stream.sink
+
+          encoder = new TextEncoder()
+          await sink([encoder.encode(JSON.stringify({ cid, startBytes: totalDownloadedSize }))])
+          for await (const chunk of stream.source) {
+            try {
+              if (!message) {
+                message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
+                console.log('message', message)
+                hasCidMsgErr = message.error
+                fileSize = message.fileSize
+                totalDownloadedSize = message.startBytes || 0
+                if (hasCidMsgErr) throw new Error(hasCidMsgErr)
+              } else { throw new Error('No message received') }
+              continue
+            } catch (err) {
+              // console.log('put chunk', cid)
+              // await node.helia.blockstore.put(CID.parse(cid), chunk.subarray())
+              const res = await node.ufs.addFile({ content: chunk.subarray() })
+              totalDownloadedSize += chunk.subarray().length
+              chunkCIDs.push(res)
+              // const percentage = ((totalDownloadedSize / fileSize) * 100).toFixed(2)
+              // console.log('\x1b[36mTotal Downloaded Size:\x1b[0m', `\x1b[33m${totalDownloadedSize}\x1b[0m`, `\x1b[32m(${percentage}%)\x1b[0m`)
+              // yield chunk.subarray()
+            }
+          }
+          // Necesitamos crear input que el `importer` entienda como archivo
+         fileInput = {
+            path: 'composed-file',
+            content: (async function * () {
+              for (const cid of chunkCIDs) {
+                const block = await node.helia.blockstore.get(cid)
+                yield block
+              }
+            })()
+          }
+          entries = importer([fileInput], node.helia.blockstore, {
+            cidVersion: 1,
+            rawLeaves: true,
+            layout: balanced({
+              maxChildrenPerNode: 1024
+            }),
+            chunker: fixedSize({
+              chunkSize: 1048576
+            })
+          })
+
+          for await (const entry of entries) {
+            if (entry.path === 'composed-file') {
+              finalCID = entry.cid
+            }
+          }
+          this.log('File size', fileSize)
+          this.log('finalCID', finalCID)
+
+          const has = await node.helia.blockstore.has(CID.parse(cid))
+          if (!has) { throw new Error('Download failed') }
+
+          this.log('Successfully downloaded and verified CID:', cid)
+          return true
+        } catch (error) {
+          this.log(`\x1b[31mError in fetchCidFromPeer (attempt ${retryCount + 1}): \x1b[0m`, error)
+          retryCount++
+
+          if (retryCount >= MAX_RETRIES) {
+            this.log('\x1b[31mMax retries reached, giving up\x1b[0m')
+            return false
+          }
+
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 2500 * retryCount))
+        } finally {
+          if (sink?.end) {
+            console.log('closing sink')
+            await sink.end()
+          }
+          if (stream?.close) {
+            console.log('closing stream')
+            await stream.close()
+          }
+
+          // Clean up variables
+          stream = null;
+          encoder = null;
+          fileInput = null;
+          sink = null;
+          message = null;
+          hasCidMsgErr = null;
+          finalCID = null;
+          entries = null;
+          totalDownloadedSize = null;
+          chunkCIDs.length = null;
+          console.log('variables cleaned')
+
+        }
+      }
+
+      return false;
+    }
+   */
+
+  async handlePFTProtocol ({ stream }) {
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+    const source = stream.source
+    const sink = stream.sink
+    try {
+      this.log('New PFT connection')
+
+      let cid = ''
+
+      for await (const chunk of source) {
+        // console.log('chunk', chunk.bufs[0])
+        cid += decoder.decode(chunk.bufs[0])
+      }
+      this.log(`PFT connection requesting cid: ${cid}`)
+
+      const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+
+      if (!has) {
+        throw new Error('CID_NOT_FOUND')
+        // Obtener el stream del archivo desde UnixFS
+      }
+
+      const stats = await this.node.getStat(cid)
+      const fileSize = Number(stats.fileSize)
+
+      // Send initial metadata
+      await sink([encoder.encode(JSON.stringify({ fileSize }))])
+
+      return true
+    } catch (error) {
+      this.log('Error in handlePFTProtocol(): ', error)
+      try {
+        await sink([encoder.encode(JSON.stringify({ error: error.message }))])
+      } catch (err) {
+        this.log('Error sending error message:', err)
+      }
+      return false
+    } finally {
+      if (stream) {
+        // Ensure stream is properly closed
+        await stream.close().catch(err => {
+          this.log('Error closing stream:', err)
+        })
+        this.log('handlePFTProtocol closed stream')
+      }
     }
   }
 
   async fetchCidFromPeer (cid, address) {
-    if (!cid || !address) {
-      throw new Error('CID and address are required')
-    }
-
-    let stream = null;
-    let retryCount = 0;
-    const MAX_RETRIES = 5;
-    let fileSize = 0;
-    let totalDownloadedSize = 0;
-    const chunkCIDs = [];
-    let encoder = null;
-    let message = null;
-    let hasCidMsgErr = '';
-    let finalCID = null;
-    let entries = null;
-    let sink = null;
-    let fileInput = null;
-    let node =  this.node
+    let stream
+    let retryCount = 0
+    const MAX_RETRIES = 5
+    const RETRY_DELAY = 2500 // 2 seconds
 
     while (retryCount < MAX_RETRIES) {
       try {
-        this.log(`\x1b[32mRequesting content for CID: ${cid} from address: ${address}\x1b[0m`)
+        this.log(`\x1b[32mRequest new content (attempt ${retryCount + 1}/${MAX_RETRIES})\x1b[0m`)
+        stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
+        this.log('Stream Id', stream.id)
+        const encoder = new TextEncoder()
 
-        stream = await this.libp2p.dialProtocol([this.multiaddr(address)], this.protocol, { signal: AbortSignal.timeout(15000) })
-        this.log('\x1b[32mStream established:\x1b[0m', stream.id)
+        // Send the CID we want
+        await stream.sink([encoder.encode(cid)])
 
-        sink = stream.sink
-
-        encoder = new TextEncoder()
-        await sink([encoder.encode(JSON.stringify({ cid, startBytes: totalDownloadedSize }))])
+        let fileSize = 0
+        let error = false
         for await (const chunk of stream.source) {
           try {
-            if (!message) {
-              message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
-              console.log('message', message)
-              hasCidMsgErr = message.error
-              fileSize = message.fileSize
-              totalDownloadedSize = message.startBytes || 0
-              if (hasCidMsgErr) throw new Error(hasCidMsgErr)
-            } else { throw new Error('No message received') }
-            continue
-          } catch (err) {
-            // console.log('put chunk', cid)
-            // await node.helia.blockstore.put(CID.parse(cid), chunk.subarray())
-            const res = await node.ufs.addFile({ content: chunk.subarray() })
-            totalDownloadedSize += chunk.subarray().length
-            chunkCIDs.push(res)
-            // const percentage = ((totalDownloadedSize / fileSize) * 100).toFixed(2)
-            // console.log('\x1b[36mTotal Downloaded Size:\x1b[0m', `\x1b[33m${totalDownloadedSize}\x1b[0m`, `\x1b[32m(${percentage}%)\x1b[0m`)
-            // yield chunk.subarray()
+            const message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
+            console.log('message', message)
+            fileSize = message.fileSize
+            error = message.error
+          } catch (error) {
+            this.log('Error parsing message: ', error)
           }
         }
-        // Necesitamos crear input que el `importer` entienda como archivo
-       fileInput = {
-          path: 'composed-file',
-          content: (async function * () {
-            for (const cid of chunkCIDs) {
-              const block = await node.helia.blockstore.get(cid)
-              yield block
-            }
-          })()
+        if (error) {
+          throw new Error(error)
         }
-        entries = importer([fileInput], node.helia.blockstore, {
-          cidVersion: 1,
-          rawLeaves: true,
-          layout: balanced({
-            maxChildrenPerNode: 1024
-          }),
-          chunker: fixedSize({
-            chunkSize: 1048576
-          })
-        })
 
-        for await (const entry of entries) {
-          if (entry.path === 'composed-file') {
-            finalCID = entry.cid
-          }
+        if (fileSize === 0) {
+          throw new Error('File size not found!')
         }
-        this.log('File size', fileSize)
-        this.log('finalCID', finalCID)
 
-        const has = await node.helia.blockstore.has(CID.parse(cid))
-        if (!has) { throw new Error('Download failed') }
-
-        this.log('Successfully downloaded and verified CID:', cid)
+        await this.downloadFromGateway(cid, address)
+        const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+        if (!has) {
+          throw new Error('CID not added!')
+        }
+        this.log(`\x1b[32m Successfully downloaded cid: ${cid} from ${address}\x1b[0m`)
         return true
       } catch (error) {
-        this.log(`\x1b[31mError in fetchCidFromPeer (attempt ${retryCount + 1}): \x1b[0m`, error)
+        this.log(`\x1b[31mError in fetchCidFromPeer (attempt ${retryCount + 1}): ${error.message}\x1b[0m`)
         retryCount++
-
+        if (error.message === 'CID_NOT_FOUND') {
+          this.log('\x1b[31mCID not found, giving up\x1b[0m')
+          return false
+        }
         if (retryCount >= MAX_RETRIES) {
           this.log('\x1b[31mMax retries reached, giving up\x1b[0m')
           return false
         }
 
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 2500 * retryCount))
+        await this.sleep(RETRY_DELAY * retryCount)
       } finally {
-        if (sink?.end) {
-          console.log('closing sink')
-          await sink.end()
+        if (stream) {
+          await stream.close().catch(err => {
+            this.log('Error closing stream:', err)
+          })
+          this.log('fetchCidFromPeer closed stream')
         }
-        if (stream?.close) {
-          console.log('closing stream')
-          await stream.close()
-        }
-
-        // Clean up variables
-        stream = null;
-        encoder = null;
-        fileInput = null;
-        sink = null;
-        message = null;
-        hasCidMsgErr = null;
-        finalCID = null;
-        entries = null;
-        totalDownloadedSize = null;
-        chunkCIDs.length = null;
-        console.log('variables cleaned')
-
-
       }
     }
 
-    return false;
+    return false
   }
 
-  async downloadCid(cid) {
+  getGatewayByRemoteAddress (address) {
+    const ip = address.split('/')[2]
+    return ip
+  }
+
+  async downloadCid (cid) {
     try {
       const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
       if (has) {
@@ -543,7 +675,7 @@ class PFTProtocol {
     }
   }
 
-  async addKnownPeer(address) {
+  async addKnownPeer (address) {
     try {
       if (!address) {
         throw new Error('Address is required')
@@ -577,11 +709,11 @@ class PFTProtocol {
     }
   }
 
-  getKnownPeers() {
+  getKnownPeers () {
     return this.privateAddresssStore
   }
 
-  removeKnownPeer(address) {
+  removeKnownPeer (address) {
     try {
       if (!address) {
         throw new Error('Address is required')
@@ -602,7 +734,7 @@ class PFTProtocol {
     }
   }
 
-  topicHandler() {
+  topicHandler () {
     try {
       const isSubscribed = this.libp2p.services.pubsub.getTopics().includes(this.topic)
       this.log(`isSubscribed: ${isSubscribed}`)
@@ -618,7 +750,7 @@ class PFTProtocol {
   }
 
   // Dial to multiAddress
-  async connect(addr) {
+  async connect (addr) {
     try {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to a node
@@ -631,7 +763,7 @@ class PFTProtocol {
   }
 
   // Dial to multiAddress
-  async disconnect(addr) {
+  async disconnect (addr) {
     try {
       if (!addr) { throw new Error('addr is required!') }
       // Connect to a node
@@ -643,7 +775,7 @@ class PFTProtocol {
     }
   }
 
-  async retryConnect(addr, attempt = 1) {
+  async retryConnect (addr, attempt = 1) {
     const MAX_ATTEMPTS = 5
     const RETRY_DELAY = 2000 // 1 minute in milliseconds
 
@@ -668,11 +800,28 @@ class PFTProtocol {
     }
   }
 
-
-
   // Add sleep utility function
-  async sleep(ms) {
+  async sleep (ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  async downloadFromGateway (cid, address) {
+    try {
+      const GATEWAY_IP = this.getGatewayByRemoteAddress(address)
+      console.log('GATEWAY_IP', GATEWAY_IP)
+      const GATEWAY_URL = `http://${GATEWAY_IP}:8080/ipfs/download/${cid}`
+      console.log('GATEWAY_URL', GATEWAY_URL)
+      const response = await axios({
+        method: 'get',
+        url: `${GATEWAY_URL}`,
+        responseType: 'stream'
+      })
+
+      const cidAdded = await this.node.ufs.addByteStream(response.data)
+      console.log('cidAdded', cidAdded)
+    } catch (error) {
+      console.error('Error al descargar el archivo:', error.message)
+    }
   }
 }
 
