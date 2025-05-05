@@ -93,6 +93,7 @@ class PinRPC {
     this.defaultRemoteProvideCallback = this.defaultRemoteProvideCallback.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.isDelegator = this.isDelegator.bind(this)
+    this.updateDiskSize = this.updateDiskSize.bind(this)
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
@@ -103,7 +104,8 @@ class PinRPC {
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 90000)
 
     this.lastDiskSize = 0
-    this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
+    this.updateDiskSizeTime = 10000 // 20 seconds
+    this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
   }
 
   async start () {
@@ -125,6 +127,7 @@ class PinRPC {
           onProvideQueue: this.onProvideQueue.length,
           diskSize: this.lastDiskSize
         }
+        // console.log('msg', msg)
         const msgStr = JSON.stringify(msg)
         this.log('Sending notify-state')
         this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
@@ -140,9 +143,9 @@ class PinRPC {
       clearInterval(this.lastDiskSizeInterval)
       const diskSize = await this.node.getDiskSize()
       this.lastDiskSize = diskSize || this.lastDiskSize
-      this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
+      this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
     } catch (error) {
-      this.lastDiskSizeInterval = setInterval(this.node.getDiskSize, 180000)
+      this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
       this.log('Error on pinRPC/updateDiskSize()', error)
     }
   }

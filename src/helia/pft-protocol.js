@@ -1,6 +1,6 @@
 /**
  *
- *  Custom private file transfer protocol.
+ *  Custom PFTP (Private File Transfer Protocol).
  *
  *  This protocol allow to  fetch a cid  from  another  known connected peer
  *
@@ -9,7 +9,6 @@
  *
  */
 import { CID } from 'multiformats/cid'
-import { pipe } from 'it-pipe'
 import { multiaddr } from '@multiformats/multiaddr'
 import axios from 'axios'
 
@@ -18,17 +17,14 @@ class PFTProtocol {
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on PFTProtocol constructor')
     }
-    this.pftPort = config.pftPort || 4004
     this.protocol = '/pft/1.0.0'
     this.topic = config.topic
     this.announce = config.node.opts.announce
-    this.ip4 = config.node.ip4
     this.node = config.node
     this.selfAddress = this.node.addresses[0].toString()
     this.knownPeerAddress = config.knownPeerAddress
     this.log = this.node.log || console.log
     this.CID = CID
-    this.pipe = pipe
     this.multiaddr = multiaddr
     // bind functions
     this.handlePFTProtocol = this.handlePFTProtocol.bind(this)
@@ -87,7 +83,7 @@ class PFTProtocol {
   }
 
   startIntervals () {
-    this.log('Starting intervals')
+    this.log('Starting intervals on PFT Protocol')
     this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
     this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
     this.nofitySubscriptionInterval = setInterval(this.publishKnownPeers, this.notificationTimer)

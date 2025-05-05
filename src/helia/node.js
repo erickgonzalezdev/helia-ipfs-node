@@ -254,7 +254,7 @@ class HeliaNode {
       this.log(`MAX CONNECTIONS : ${this.opts.maxConnections}`)
 
       const libp2p = await this.createLibp2p(libp2pInputs)
-      await libp2p.services.dht.reprovider.stop()
+      //  await libp2p.services.dht.reprovider.stop()
 
       this.peerId = peerId
       // Create helia node
@@ -634,7 +634,7 @@ class HeliaNode {
       this.log(`Node size :  ${mbSize} MB`)
       return mbSize
     } catch (err) {
-      this.log('Error in getDiskSize()', err)
+      this.log('Error in getDiskSize()', err.message)
       return false
     }
   }

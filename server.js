@@ -16,8 +16,7 @@ const wsPort = process.env.WS_PORT ? process.env.WS_PORT : 6001 // Websocket por
 const tcpPort = process.env.TCP_PORT ? process.env.TCP_PORT : 6002 // TCP port
 const gatewayPort = process.env.GATEWAY_PORT ? process.env.GATEWAY_PORT : 8050 // Gateway port
 const pinServiceTopic = process.env.PIN_SERVICE_TOPIC ? process.env.PIN_SERVICE_TOPIC : 'pin-rpc-topic' // Pin service topic
-const knownPeerAddress = process.env.KNOWN_PEER_ADDRESS ? process.env.KNOWN_PEER_ADDRESS : ''// A known peer address to connect to , a replicate connection
-const netWorking = process.env.NETWORKING ? process.env.NETWORKING : 'minimal' // Networking mode
+const knownPeerAddress = process.env.KNOWN_PEER_ADDRESS ? process.env.KNOWN_PEER_ADDRESS : ''// A known peer address to connect to , a replicate connection with the pftp
 const gbPeriod = process.env.GB_PERIOD ? process.env.GB_PERIOD : null // Garbage collector period
 const relay = process.env.RELAY // Enable circuit relay
 const announce = process.env.ANNOUNCE // For production mode , use your public address for announce
@@ -25,8 +24,6 @@ const serverDHTProvide = process.env.SERVER_DHT_PROVIDE // Start a DHT server to
 const role = process.env.ROLE || 'node' // 'node' 'pinner' 'delegator'
 const maxConnections = process.env.MAX_CONNECTIONS ? process.env.MAX_CONNECTIONS : 100
 const announceAddr = process.env.ANNOUNCE_ADDR ? process.env.ANNOUNCE_ADDR : ''
-const pftPort = process.env.PFT_PORT ? process.env.PFT_PORT : 4004
-const pinServiceAddress = process.env.PIN_SERVICE_ADDRESS ? process.env.PIN_SERVICE_ADDRESS : ''
 
 //  Initialize A node with tools.
 const start = async () => {
@@ -35,7 +32,6 @@ const start = async () => {
     alias,
     wsPort,
     tcpPort,
-    networking: netWorking,
     relay,
     announce,
     announceAddr,
@@ -53,25 +49,15 @@ const start = async () => {
   await rpc.start()
 
   // Instantiate PFT Protocol
-  const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic, pftPort })
+  const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic })
   await pft.start()
 
   // Instantiate Garbage Collector
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
 
+  // Run GC on start script
   await node.helia.gc()
-  try { await node.connect(pinServiceAddress) } catch (error) {}
-
-  setInterval(async () => {
-    if (pinServiceAddress) {
-      try {
-        try { await node.connect(pinServiceAddress) } catch (error) {}
-      } catch (error) {
-        console.log('Error connecting to pin service', error)
-      }
-    }
-  }, 20000)
 }
 
 start()
