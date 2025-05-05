@@ -72,9 +72,11 @@ class HeliaNode {
     this.upload = this.upload.bind(this)
     this.uploadDir = this.uploadDir.bind(this)
     this.pftpDownload = this.pftpDownload.bind(this)
+    this.GATEWAY_PORT = null // gateway port , replaced  by gateway library
 
     // this.uploadObject = this.uploadObject.bind(this)
     // this.uploadString = this.uploadString.bind(this)
+    this.getIPByRemoteAddress = this.getIPByRemoteAddress.bind(this)
     this.uploadStrOrObj = this.uploadStrOrObj.bind(this)
     this.uploadFile = this.uploadFile.bind(this)
     // this.listProviders = this.listProviders.bind(this)
@@ -675,6 +677,11 @@ class HeliaNode {
   // this function will be replaced if u provide this node to the pftp protocol.
   async pftpDownload (cid) {
     return false
+  }
+
+  getIPByRemoteAddress (address) {
+    const ip = address.split('/')[2]
+    return ip
   }
 }
 

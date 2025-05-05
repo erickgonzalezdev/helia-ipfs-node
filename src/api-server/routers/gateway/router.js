@@ -7,7 +7,9 @@ class RouterHanlder {
     this.controller = new Controller(config)
     this.router = new Router({ prefix: '/ipfs' })
     this.port = config.port
+    this.node = config.node
     this.start = this.start.bind(this)
+    this.generateGatewayURL = this.generateGatewayURL.bind(this)
   }
 
   async start (app) {
@@ -19,9 +21,23 @@ class RouterHanlder {
     app.use(this.router.routes())
     app.use(this.router.allowedMethods())
 
+    const gatewayURL = this.generateGatewayURL()
+    this.node.GATEWAY_URL = gatewayURL
+
     const helloCid = await this.controller.setHelloWorld()
     console.log('Gateway started!')
-    console.log(`http://127.0.0.1:${this.port}/ipfs/${helloCid}`)
+    console.log(`${this.node.GATEWAY_URL}/${helloCid}`)
+  }
+
+  generateGatewayURL () {
+    try {
+      const address = this.node.addresses[0].toString()
+      const ip = this.node.getIPByRemoteAddress(address)
+      return `http://${ip}:${this.port}/ipfs/download`
+    } catch (error) {
+      console.log('Error creating gateway URL', error)
+      return null
+    }
   }
 }
 
