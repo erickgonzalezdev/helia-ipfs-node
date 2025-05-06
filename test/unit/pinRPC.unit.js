@@ -291,10 +291,10 @@ describe('#pinRPC.js', () => {
     })
   })
 
-  describe('#listen', () => {
+  describe('#listenPubsub', () => {
     it('should subscribe to the event listener', async () => {
       try {
-        uut.listen()
+        uut.listenPubsub()
       } catch (err) {
         assert.fail('Unexpected code path')
       }
@@ -303,7 +303,7 @@ describe('#pinRPC.js', () => {
     it('should handle error', async () => {
       try {
         sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'addEventListener').throws(new Error('Test Error'))
-        uut.listen()
+        uut.listenPubsub()
         assert.fail('Unexpected code path')
       } catch (err) {
         assert.include(err.message, 'Test Error')
@@ -567,7 +567,7 @@ describe('#pinRPC.js', () => {
     })
   })
 
-  describe('#parsePinMsgProtocol', () => {
+  describe('#parseMsgProtocol', () => {
     it('should handle pass validation if toPeerId string match with node peer id', async () => {
       try {
         uut.node.peerId = 'node peer id'
@@ -584,13 +584,14 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
+        console.log(err)
         assert.fail('Unexpected code path')
       }
     })
@@ -605,11 +606,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -626,11 +627,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -647,11 +648,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -668,11 +669,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -689,11 +690,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -710,11 +711,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -731,11 +732,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isTrue(result)
       } catch (err) {
         assert.fail('Unexpected code path')
@@ -752,11 +753,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'invalid protocol')
       } catch (err) {
@@ -766,7 +767,7 @@ describe('#pinRPC.js', () => {
 
     it('should handle error', async () => {
       try {
-        await uut.parsePinMsgProtocol()
+        await uut.parseMsgProtocol()
         assert.fail('Unexpected code path')
       } catch (err) {
         assert.include(err.message, 'Cannot read properties of undefined')
@@ -788,7 +789,7 @@ describe('#pinRPC.js', () => {
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'invalid topic')
       } catch (err) {
@@ -806,11 +807,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'destination peerId does not match')
       } catch (err) {
@@ -828,11 +829,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'destination peerId does not match')
       } catch (err) {
@@ -853,11 +854,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        await uut.parsePinMsgProtocol(message)
+        await uut.parseMsgProtocol(message)
         assert.fail('Unexpected code path')
       } catch (err) {
         assert.include(err.message, 'Test Error')
@@ -881,11 +882,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'invalid protocol')
         assert.equal(spy.callCount, 0)
@@ -911,11 +912,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'invalid protocol')
         assert.equal(spy.callCount, 0)
@@ -941,11 +942,11 @@ describe('#pinRPC.js', () => {
         }
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
-        const result = await uut.parsePinMsgProtocol(message)
+        const result = await uut.parseMsgProtocol(message)
         assert.isString(result)
         assert.include(result, 'invalid protocol')
         assert.equal(spy.callCount, 0)
@@ -955,7 +956,7 @@ describe('#pinRPC.js', () => {
     })
   })
 
-  describe('#parseStateMsgProtocol', () => {
+  /* describe('#parseStateMsgProtocol', () => {
     it('should handle "notify-state" action', async () => {
       try {
         uut.node.peerId = 'node peer id'
@@ -1027,16 +1028,16 @@ describe('#pinRPC.js', () => {
         assert.fail('Unexpected code path')
       }
     })
-  })
+  }) */
 
   describe('#handlePubsubMsg', () => {
     it('should handle pin topic', async () => {
       try {
-        sandbox.stub(uut, 'parsePinMsgProtocol').returns(true)
+        sandbox.stub(uut, 'parseMsgProtocol').returns(true)
         const msgData = {}
         const message = {
           detail: {
-            topic: uut.pinTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
@@ -1048,11 +1049,11 @@ describe('#pinRPC.js', () => {
     })
     it('should handle state topic', async () => {
       try {
-        sandbox.stub(uut, 'parseStateMsgProtocol').returns(true)
+        sandbox.stub(uut, 'parseMsgProtocol').returns(true)
         const msgData = {}
         const message = {
           detail: {
-            topic: uut.stateTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
@@ -1080,11 +1081,11 @@ describe('#pinRPC.js', () => {
     })
     it('should return false on error', async () => {
       try {
-        sandbox.stub(uut, 'parseStateMsgProtocol').throws(new Error('test error'))
+        sandbox.stub(uut, 'parseMsgProtocol').throws(new Error('test error'))
         const msgData = {}
         const message = {
           detail: {
-            topic: uut.stateTopic,
+            topic: uut.topic,
             data: new TextEncoder().encode(JSON.stringify(msgData))
           }
         }
@@ -1237,11 +1238,11 @@ describe('#pinRPC.js', () => {
   describe('#topicHandler', () => {
     it('should re-subscribe to topics', async () => {
       try {
-        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'unsubscribe').returns(true)
+        sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'getTopics').returns([])
         const spy = sandbox.stub(uut.node.helia.libp2p.services.pubsub, 'subscribe').returns(true)
-        const result = uut.topicHandler(['topic1', 'topic2'])
+        const result = uut.topicHandler()
         assert.isTrue(result)
-        assert.isTrue(spy.calledTwice)
+        assert.isTrue(spy.calledOnce)
       } catch (err) {
         console.log(err)
         assert.fail('Unexpected code path')

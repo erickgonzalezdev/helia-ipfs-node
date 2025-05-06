@@ -23,6 +23,7 @@ class Libp2pMock {
       pubsub: new Pubsub(),
       ping: { ping: () => { return 1 } }
     }
+    this.addEventListener = () => { return true }
   }
 
   getMultiaddrs () { return [] }

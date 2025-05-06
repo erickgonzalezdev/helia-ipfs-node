@@ -17,6 +17,7 @@ class PFTProtocol {
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on PFTProtocol constructor')
     }
+    this.axios = axios
     this.protocol = '/pft/1.0.0'
     this.topic = config.topic
     this.announce = config.node.opts.announce
@@ -184,8 +185,11 @@ class PFTProtocol {
         }
       }
       this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+      return true
     } catch (error) {
+      this.log('Error in renewKnownPeerConnection()', error)
       this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+      return false
     }
   }
 
@@ -477,7 +481,7 @@ class PFTProtocol {
       }
       const GATEWAY_URL = `${gateway}/${cid}`
       this.log('GATEWAY_URL TO DOWNLOAD', GATEWAY_URL)
-      const response = await axios({
+      const response = await this.axios({
         method: 'get',
         url: `${GATEWAY_URL}`,
         responseType: 'stream'
