@@ -76,7 +76,7 @@ class PFTProtocol {
     this.listenPubsub()
     this.topicHandler()
     // handle protocol
-    this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
+    // this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
     // this.listenPeerDisconnections()
     this.listenConnectionClose()
     this.startIntervals()
@@ -128,11 +128,12 @@ class PFTProtocol {
   }
 
   cleanKnownPeers () {
+    this.log('\x1b[33mCleaning know peers: \x1b[0m')
     for (const peer of this.privateAddresssStore) {
       const disconnectedTime = this.disconnectedPeerRecordsTime[peer.address]
       if (disconnectedTime) {
         const timeSinceDisconnect = Math.floor((new Date().getTime() - disconnectedTime) / 1000)
-        this.log(`Time since disconnect: ${timeSinceDisconnect} seconds for address: ${peer.address}`)
+        this.log(`\x1b[33mTime since disconnect: ${timeSinceDisconnect / 60} minutes for address: ${peer.address}\x1b[0m`)
         // Dont remove peer if has been disconnected for less than 3 minutes
         if (timeSinceDisconnect > 180) { // 3 minutes in seconds
           this.removeKnownPeer(peer.address)
@@ -154,7 +155,6 @@ class PFTProtocol {
   listenConnectionClose () {
     this.node.helia.libp2p.addEventListener('connection:close', async (evt) => {
       const closedPeerAddr = evt.detail.remoteAddr.toString()
-
       // Check if the closed connection was with a known peer
       if (this.privateAddresssStore.some(peer => peer.address === closedPeerAddr)) {
         this.log(`\x1b[32m Known peer disconnected: ${closedPeerAddr}\x1b[0m`)
@@ -179,6 +179,7 @@ class PFTProtocol {
         try {
           // this disconnection trigger the connection close event, then try to reconnect and renew the connection
           await this.node.connect(peer.address)
+          this.disconnectedPeerRecordsTime[peer.address] = 0
           this.log(`\x1b[33mSuccessfully reconnected to peer: ${peer.address}\x1b[0m`)
         } catch (error) {
           this.log(`\x1b[31mFailed to reconnect to ${peer.address}: ${error.message}\x1b[0m`)
@@ -351,8 +352,9 @@ class PFTProtocol {
       }
 
       for (const peer of this.privateAddresssStore) {
+        this.log(`downloadCid fetch addr${peer.address}`)
         const inObj = { cid, address: peer.address, gateway: peer.gateway }
-        const result = await this.fetchCidFromPeer(inObj)
+        const result = await this.downloadFromGateway(inObj)
         this.log(`downloadCid fetch addr${peer.address} result ${result}`)
         if (result) {
           this.log('CID found on PFTP')
@@ -450,7 +452,7 @@ class PFTProtocol {
       // Attempt to connect to the node
       const connection = await this.node.connect(addr)
       this.log(`\x1b[32mSuccessfully connected to ${addr} on attempt ${attempt}\x1b[0m`)
-      delete this.disconnectedPeerRecordsTime[addr]
+      this.disconnectedPeerRecordsTime[addr] = 0
       return connection
     } catch (error) {
       this.log(`\x1b[33mFailed to connect to ${addr} (attempt ${attempt}/${MAX_ATTEMPTS}): ${error.message}\x1b[0m`)
@@ -488,7 +490,12 @@ class PFTProtocol {
       })
 
       const cidAdded = await this.node.ufs.addByteStream(response.data)
+
+      const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+
       this.log('cidAdded', cidAdded)
+
+      return has
     } catch (error) {
       this.log('Error on downloadFromGateway:', error.message)
     }

@@ -176,6 +176,7 @@ class HeliaNode {
           : []
       },
       connectionManager: {
+        autoDial: true,
         maxConnections: this.opts.maxConnections || 50,
         minConnections: this.opts.maxConnections ? this.opts.maxConnections * 0.5 : 10
 
@@ -251,7 +252,8 @@ class HeliaNode {
       this.log(`RELAY : ${!!this.opts.relay}`)
       this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
       this.log(`Announce Public Addresses: ${!!this.opts.announce}`)
-      this.log(`MAX CONNECTIONS : ${this.opts.maxConnections}`)
+      this.log(`MAX CONNECTIONS : ${libp2pInputs.connectionManager.maxConnections}`)
+      this.log(`MIN CONNECTIONS : ${libp2pInputs.connectionManager.minConnections}`)
 
       const libp2p = await this.createLibp2p(libp2pInputs)
       //  await libp2p.services.dht.reprovider.stop()

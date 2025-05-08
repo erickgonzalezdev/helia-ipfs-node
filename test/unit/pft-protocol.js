@@ -105,14 +105,14 @@ describe('#PFTProtocol', () => {
     it('should download cid', async () => {
       sandbox.stub(uut.node.helia.blockstore, 'has').resolves(false)
       uut.privateAddresssStore = ['testaddress']
-      sandbox.stub(uut, 'fetchCidFromPeer').resolves(true)
+      sandbox.stub(uut, 'downloadFromGateway').resolves(true)
       const result = await uut.downloadCid('testcid')
       assert.isTrue(result)
     })
     it('should download cid locally', async () => {
       sandbox.stub(uut.node.helia.blockstore, 'has').resolves(true)
       uut.privateAddresssStore = ['testaddress']
-      sandbox.stub(uut, 'fetchCidFromPeer').resolves(true)
+      sandbox.stub(uut, 'downloadFromGateway').resolves(true)
       const result = await uut.downloadCid('testcid')
       assert.isTrue(result)
     })
@@ -125,7 +125,7 @@ describe('#PFTProtocol', () => {
     it('should return false if cid is not found', async () => {
       sandbox.stub(uut.node.helia.blockstore, 'has').resolves(false)
       uut.privateAddresssStore = ['testaddress']
-      sandbox.stub(uut, 'fetchCidFromPeer').resolves(false)
+      sandbox.stub(uut, 'downloadFromGateway').resolves(false)
       const result = await uut.downloadCid('testcid')
       assert.isFalse(result)
     })

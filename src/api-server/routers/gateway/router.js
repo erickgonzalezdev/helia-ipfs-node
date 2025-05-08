@@ -15,6 +15,7 @@ class RouterHanlder {
   async start (app) {
     this.router.get('/connections', this.controller.getConnections)
     this.router.get('/download/:cid', this.controller.downloadContent)
+    this.router.get('/pftp/:cid', this.controller.pftpDownload)
     this.router.get('/:cid/:name', this.controller.getContent)
     this.router.get('/:cid', this.controller.getContent)
 
@@ -33,7 +34,7 @@ class RouterHanlder {
     try {
       const address = this.node.addresses[0].toString()
       const ip = this.node.getIPByRemoteAddress(address)
-      return `http://${ip}:${this.port}/ipfs/download`
+      return `http://${ip}:${this.port}/ipfs/pftp`
     } catch (error) {
       console.log('Error creating gateway URL', error)
       return null

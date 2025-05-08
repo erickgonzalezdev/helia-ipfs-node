@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type'
 import Stream from 'stream'
+import { CID } from 'multiformats/cid'
 
 const CHUNK_SIZE = 10 ** 6 * 10// 10MB
 
@@ -9,12 +10,18 @@ export default class Gateway {
     this.config = config
     this.node = config.node
     this.fs = fs
+    this.CID = CID
     this.getContent = this.getContent.bind(this)
     this.handleError = this.handleError.bind(this)
     this.setHelloWorld = this.setHelloWorld.bind(this)
     this.getConnections = this.getConnections.bind(this)
     this.log = this.node.log || console.log
     this.downloadContent = this.downloadContent.bind(this)
+    this.parseFolderFormat = this.parseFolderFormat.bind(this)
+    this.streamContent = this.streamContent.bind(this)
+    this.getStreamFileType = this.getStreamFileType.bind(this)
+    this.lsDirectoryContent = this.lsDirectoryContent.bind(this)
+    this.pftpDownload = this.pftpDownload.bind(this)
   }
 
   async getContent (ctx) {
@@ -245,6 +252,22 @@ export default class Gateway {
     } catch (error) {
       this.log(error)
       throw error
+    }
+  }
+
+  async pftpDownload (ctx) {
+    try {
+      const { cid } = ctx.params
+      this.log('\x1b[36m%s\x1b[0m', `PFTP Gateway Download Start For CID: ${cid}`)
+      const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+      if (!has) {
+        throw new Error('CID not found!')
+      }
+      // Send all content
+      const totalFileChunks = await this.node.getContent(cid)
+      ctx.body = totalFileChunks
+    } catch (error) {
+      this.handleError(ctx, error)
     }
   }
 

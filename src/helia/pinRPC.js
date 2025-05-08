@@ -244,7 +244,6 @@ class PinRPC {
 
   async parseMsgProtocol (message = {}) {
     try {
-      console.log('parseMsgProtocol', message)
       if (message.detail.topic !== this.topic) return 'invalid topic'
       const msgStr = new TextDecoder().decode(message.detail.data)
       const msgObj = JSON.parse(msgStr)
