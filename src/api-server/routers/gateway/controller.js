@@ -25,7 +25,6 @@ export default class Gateway {
     this.pftpDownload = this.pftpDownload.bind(this)
     this.tryToPinContent = this.tryToPinContent.bind(this)
     this.tryToUnpinContent = this.tryToUnpinContent.bind(this)
-    
   }
 
   async getContent (ctx) {
@@ -112,7 +111,7 @@ export default class Gateway {
         await this.node.lazyDownload(cidToFetch)
       }
 
-      if(this.pinOnGetContent) {
+      if (this.pinOnGetContent) {
         await this.tryToPinContent(cidToFetch)
       }
 
@@ -308,7 +307,7 @@ export default class Gateway {
     try {
       await this.node.pinCid(cid)
       this.log(`Content ${cid} pinned from gateway`)
-    } catch (error) {/* ignore error */ }
+    } catch (error) { /* ignore error */ }
   }
 
   async tryToUnpinContent (cid) {
@@ -316,5 +315,5 @@ export default class Gateway {
       await this.node.unPinCid(cid)
       this.log(`Content ${cid} unpinned from gateway`)
     } catch (error) { /* ignore error */ }
-  } 
+  }
 }

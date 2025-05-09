@@ -41,7 +41,7 @@ import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
-import TimeStampMetadata  from './ts-metadata.js'
+import TimeStampMetadata from './ts-metadata.js'
 
 class HeliaNode {
   constructor (inputOptions = {}) {
@@ -269,7 +269,7 @@ class HeliaNode {
         libp2p
       })
 
-      this.tsMetadata = new TimeStampMetadata({ datastore  , blockstore})
+      this.tsMetadata = new TimeStampMetadata({ datastore, blockstore })
       const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
 

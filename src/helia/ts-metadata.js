@@ -1,9 +1,8 @@
-import { Key } from "interface-datastore"
+import { Key } from 'interface-datastore'
 import { CID } from 'multiformats/cid'
 
-
 class TimeStampMetadata {
-  constructor(config = {}) {
+  constructor (config = {}) {
     this.datastore = config.datastore
     this.blockstore = config.blockstore
     this.encoder = new TextEncoder()
@@ -23,7 +22,7 @@ class TimeStampMetadata {
   // Record last time of and action over a cid
   // Actions : 'lastAccessAt', 'providedAt'
   // Store timestamp of each action provided
-  async updateMetadata(cid, action) {
+  async updateMetadata (cid, action) {
     try {
       let record = await this.getMetadata(cid)
       if (!record) {
@@ -45,16 +44,17 @@ class TimeStampMetadata {
     }
   }
 
-  async getMetadata(cid) {
+  async getMetadata (cid) {
     const key = new Key(this.storeKey + '/' + cid)
     const has = await this.datastore.has(key)
     if (!has) return null
     const data = await this.datastore.get(key)
     return JSON.parse(this.decoder.decode(data))
   }
-  async deleteMetadata(cid) {
+
+  async deleteMetadata (cid) {
     // console.log('cid', cid)
-    let record = await this.getMetadata(cid)
+    const record = await this.getMetadata(cid)
     // console.log('record to delete', record)
     if (!record) {
       // console.log('no record to delete found!')
@@ -67,7 +67,7 @@ class TimeStampMetadata {
   }
 
   // Delete metadata records for CIDs that are no longer found in the blockstore
-  async garbageCollector() {
+  async garbageCollector () {
     try {
       // crear interval
       clearInterval(this.gcInterval)
@@ -78,10 +78,10 @@ class TimeStampMetadata {
       })
 
       // iterate over all records
-      for await (const { key, value } of q) {
+      for await (const { value } of q) {
         try {
           const json = JSON.parse(new TextDecoder().decode(value))
-          //console.log('Registro encontrado:', json)
+          // console.log('Registro encontrado:', json)
           const lastMetadataUpdate = json.lastMetadataUpdate
           const now = new Date().getTime()
           const timeDiff = now - lastMetadataUpdate
@@ -111,6 +111,5 @@ class TimeStampMetadata {
       console.error('Error en garbageCollection:', error)
     }
   }
-
 }
 export default TimeStampMetadata

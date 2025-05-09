@@ -1,31 +1,31 @@
 import Gateway from './gateway/router.js'
 
 export default class initRouter {
-  constructor(config = {}) {
+  constructor (config = {}) {
     this.node = config.node
     this.log = this.node.log || console.log
     this.gateway = new Gateway(config)
-    this.unpinOnLastAccessOfHours = config.unpinOnLastAccessOfHours // hours > Unpin content after last access in hours
-
+    this.unpinOnLastAccessOfHours = Number(config.unpinOnLastAccessOfHours) // hours > Unpin content after last access in hours
+    this.pinOnGetContent = config.pinOnGetContent
     this.start = this.start.bind(this)
     this.unpinContent = this.unpinContent.bind(this)
     this.unpinIntervalTime = 1000 * 60 * 60 // 1 hour
     this.unpinInterval = null
-
   }
 
-  start(app) {
+  start (app) {
     this.gateway.start(app)
 
+    this.log('Pin On Get Content', this.pinOnGetContent)
+    this.log('Unpin On Last Access Of Hours', this.unpinOnLastAccessOfHours)
     if (this.unpinOnLastAccessOfHours && typeof this.unpinOnLastAccessOfHours === 'number') {
       console.log('Starting interval for unpinning content after last access of', this.unpinOnLastAccessOfHours, 'hours')
       this.unpinInterval = setInterval(this.unpinContent, this.unpinIntervalTime)
     }
   }
 
-  async unpinContent() {
+  async unpinContent () {
     try {
-
       clearInterval(this.unpinInterval)
       const pins = await this.node.getPins()
 
