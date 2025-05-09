@@ -9,6 +9,7 @@ export default class Gateway {
   constructor (config = {}) {
     this.config = config
     this.node = config.node
+    this.pinOnGetContent = config.pinOnGetContent // true || false >  Get content pinned after fetch
     this.fs = fs
     this.CID = CID
     this.getContent = this.getContent.bind(this)
@@ -22,6 +23,9 @@ export default class Gateway {
     this.getStreamFileType = this.getStreamFileType.bind(this)
     this.lsDirectoryContent = this.lsDirectoryContent.bind(this)
     this.pftpDownload = this.pftpDownload.bind(this)
+    this.tryToPinContent = this.tryToPinContent.bind(this)
+    this.tryToUnpinContent = this.tryToUnpinContent.bind(this)
+    
   }
 
   async getContent (ctx) {
@@ -53,6 +57,10 @@ export default class Gateway {
       if (localSize < fileSize) {
         this.log(`Node Lazy Downloading for ${cidToFetch}`)
         await this.node.lazyDownload(cidToFetch)
+      }
+      // console.log('pinOnGetContent',this.pinOnGetContent)
+      if (this.pinOnGetContent) {
+        await this.tryToPinContent(cidToFetch)
       }
 
       // Try to stream content.
@@ -102,6 +110,10 @@ export default class Gateway {
       if (localSize < fileSize) {
         this.log(`Node Lazy Downloading for ${cidToFetch}`)
         await this.node.lazyDownload(cidToFetch)
+      }
+
+      if(this.pinOnGetContent) {
+        await this.tryToPinContent(cidToFetch)
       }
 
       // Send all content
@@ -291,4 +303,18 @@ export default class Gateway {
       this.handleError(ctx, error)
     }
   }
+
+  async tryToPinContent (cid) {
+    try {
+      await this.node.pinCid(cid)
+      this.log(`Content ${cid} pinned from gateway`)
+    } catch (error) {/* ignore error */ }
+  }
+
+  async tryToUnpinContent (cid) {
+    try {
+      await this.node.unPinCid(cid)
+      this.log(`Content ${cid} unpinned from gateway`)
+    } catch (error) { /* ignore error */ }
+  } 
 }

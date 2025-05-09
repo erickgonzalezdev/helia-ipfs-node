@@ -41,6 +41,8 @@ import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
+import TimeStampMetadata  from './ts-metadata.js'
+
 class HeliaNode {
   constructor (inputOptions = {}) {
     this.multiaddr = multiaddr
@@ -64,6 +66,7 @@ class HeliaNode {
     this.helia = null
     this.ufs = null
     this.ip4 = null
+    this.tsMetadata = null
     this.addresses = [] // node multi address
 
     this.start = this.start.bind(this)
@@ -266,6 +269,7 @@ class HeliaNode {
         libp2p
       })
 
+      this.tsMetadata = new TimeStampMetadata({ datastore  , blockstore})
       const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
 
@@ -429,11 +433,12 @@ class HeliaNode {
       if (!CID || typeof CID !== 'string') {
         throw new Error('CID string is required.')
       }
-
       const chunks = []
       for await (const chunk of this.ufs.cat(CID, options)) {
         chunks.push(chunk)
       }
+
+      await this.tsMetadata.updateMetadata(CID, 'lastAccessAt')
 
       return Buffer.concat(chunks)
     } catch (error) {
@@ -542,6 +547,7 @@ class HeliaNode {
         for await (const pinnedCid of this.helia.pins.add(CID.parse(cid))) {
           resolves(pinnedCid)
         }
+        await this.tsMetadata.updateMetadata(cid, 'pinnedAt')
         this.log('Pinned content.!')
       } catch (error) {
         this.log('Error in pinCid()', error)
@@ -560,6 +566,7 @@ class HeliaNode {
         for await (const unpinnedCid of this.helia.pins.rm(CID.parse(cid))) {
           resolves(unpinnedCid)
         }
+        await this.tsMetadata.updateMetadata(cid, 'unpinnedAt')
       } catch (error) {
         this.log('Error in unPinCid()', error)
         reject(error)
@@ -573,7 +580,7 @@ class HeliaNode {
       try {
         const pins = []
         for await (const cid of this.helia.pins.ls()) {
-          pins.push(cid)
+          pins.push(cid.cid)
         }
 
         resolves(pins)
@@ -648,6 +655,7 @@ class HeliaNode {
       }
       await this.helia.routing.provide(CID.parse(cid), options)
       this.log(`Provided cid ${cid}`)
+      await this.tsMetadata.updateMetadata(cid, 'providedAt')
       return true
     } catch (err) {
       this.log('Error in provideCID()', err)
