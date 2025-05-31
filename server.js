@@ -9,7 +9,7 @@
  *
  */
 
-import { HeliaNode, Server, PinRPC, GB, PFTProtocol } from './src/lib.js'
+import { HeliaNode, Server, PinRPC, GB, PFTProtocol, Reprovider } from './src/lib.js'
 
 const alias = process.env.ALIAS ? process.env.ALIAS : 'my node' // Node name
 const wsPort = process.env.WS_PORT ? process.env.WS_PORT : 6001 // Websocket port
@@ -24,6 +24,7 @@ const serverDHTProvide = process.env.SERVER_DHT_PROVIDE // Start a DHT server to
 const role = process.env.ROLE || 'node' // 'node' 'pinner' 'delegator'
 const maxConnections = process.env.MAX_CONNECTIONS ? process.env.MAX_CONNECTIONS : 100
 const announceAddr = process.env.ANNOUNCE_ADDR ? process.env.ANNOUNCE_ADDR : ''
+const reproviderPeriod = process.env.REPROVIDER_PERIOD ? process.env.REPROVIDER_PERIOD : 1 // minutes
 
 //  Initialize A node with tools.
 const start = async () => {
@@ -52,9 +53,13 @@ const start = async () => {
   const pft = new PFTProtocol({ node, knownPeerAddress, topic: pinServiceTopic })
   await pft.start()
 
-  // Instantiate Garbage Collector
+  // Instantiate Garbage Collector period
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
+
+  // Instantiate Reprovider
+  const reprovider = new Reprovider({ node, period: reproviderPeriod })
+  await reprovider.start()
 
   // Run GC on start script
   await node.helia.gc()

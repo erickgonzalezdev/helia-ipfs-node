@@ -14,7 +14,7 @@ class TimeStampMetadata {
     this.getMetadata = this.getMetadata.bind(this)
     this.deleteMetadata = this.deleteMetadata.bind(this)
     this.garbageCollector = this.garbageCollector.bind(this)
-
+    this.getAllMetadatas = this.getAllMetadatas.bind(this)
     this.gcTime = 1000 * 60 * 60 * 2 // 2 hours
     this.gcInterval = setInterval(this.garbageCollector, this.gcTime)
   }
@@ -66,7 +66,22 @@ class TimeStampMetadata {
     return true
   }
 
+  // Query all metadata records
+  async getAllMetadatas () {
+    const q = this.datastore.query({
+      prefix: this.storeKey
+    })
+    const records = []
+    for await (const { value } of q) {
+      const json = JSON.parse(new TextDecoder().decode(value))
+      records.push(json)
+    }
+    return records
+  }
+
+  // Block Store Garbage Collector for metadata records
   // Delete metadata records for CIDs that are no longer found in the blockstore
+  // This functions delete metadata records for cids not hosted in the node  or removed from the node
   async garbageCollector () {
     try {
       // crear interval

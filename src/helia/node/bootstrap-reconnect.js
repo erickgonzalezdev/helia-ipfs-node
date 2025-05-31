@@ -6,7 +6,7 @@
  *
  */
 
-export default class BootstrapReconnect  {
+export default class BootstrapReconnect {
   constructor (config = { }) {
     this.config = config
     // Dependency Injection.
