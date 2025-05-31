@@ -16,8 +16,8 @@ export default class initRouter {
   start (app) {
     this.gateway.start(app)
 
-    this.log('Pin On Get Content', this.pinOnGetContent)
-    this.log('Unpin On Last Access Of Hours', this.unpinOnLastAccessOfHours)
+    this.log('Gateway Enable Pin On Get Content', !!this.pinOnGetContent)
+    this.log('Gateway Unpin On Last Access Of Hours', !!this.unpinOnLastAccessOfHours)
     if (this.unpinOnLastAccessOfHours && typeof this.unpinOnLastAccessOfHours === 'number') {
       console.log('Starting interval for unpinning content after last access of', this.unpinOnLastAccessOfHours, 'hours')
       this.unpinInterval = setInterval(this.unpinContent, this.unpinIntervalTime)

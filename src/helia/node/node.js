@@ -14,7 +14,7 @@ import { logger, disable } from '@libp2p/logger'
 import path from 'path'
 import { bootstrap } from '@libp2p/bootstrap'
 
-import { bootstrapConfig } from '../util/bootstrap.js'
+import { bootstrapConfig } from '../../util/bootstrap.js'
 
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 
@@ -36,12 +36,13 @@ import { publicIpv4 } from 'public-ip'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import getFolderSize from 'get-folder-size'
 
-import { sleep } from '../util/util.js'
+import { sleep } from '../../util/util.js'
 import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
 
 import TimeStampMetadata from './ts-metadata.js'
+import BootstrapReconnect from './bootstrap-reconnect.js'
 
 class HeliaNode {
   constructor (inputOptions = {}) {
@@ -272,6 +273,9 @@ class HeliaNode {
       this.tsMetadata = new TimeStampMetadata({ datastore, blockstore })
       const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
+
+      const bootstrapReconnect = new BootstrapReconnect({ node: this })
+      await bootstrapReconnect.start()
 
       this.ufs = this.unixfs(this.helia)
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)

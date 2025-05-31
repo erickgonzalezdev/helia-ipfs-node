@@ -9,7 +9,7 @@
  *
  */
 
-import { HeliaNode, Server, PinRPC, GB, PFTProtocol, ConnectionManager } from './src/lib.js'
+import { HeliaNode, Server, PinRPC, GB, PFTProtocol } from './src/lib.js'
 
 const alias = process.env.ALIAS ? process.env.ALIAS : 'my node' // Node name
 const wsPort = process.env.WS_PORT ? process.env.WS_PORT : 6001 // Websocket port
@@ -55,10 +55,6 @@ const start = async () => {
   // Instantiate Garbage Collector
   const gb = new GB({ node, period: gbPeriod })
   await gb.start()
-
-  // Instantiate Connection Manager
-  const connectionManager = new ConnectionManager({ node })
-  await connectionManager.start()
 
   // Run GC on start script
   await node.helia.gc()

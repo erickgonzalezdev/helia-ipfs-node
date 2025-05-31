@@ -1,13 +1,12 @@
 /**
- * Garbage collection
+ * Bootstrap Reconnect
  *
- * This class is used to collect garbage from the node every period of time.
- * It is used to clean the node from unpinned cid and free up space.
+ * This class is used to reconnect manually to the bootstrap nodes.
  *
  *
  */
 
-export default class ConnectionManager {
+export default class BootstrapReconnect  {
   constructor (config = { }) {
     this.config = config
     // Dependency Injection.
@@ -27,13 +26,13 @@ export default class ConnectionManager {
   }
 
   async start () {
-    this.log(`Starting garbageCollection interval  for ${this.gcPeriod / 60000} minutes`)
+    this.log(`Starting bootstrap reconnect interval  for ${this.renewBootstrapConnectionsPeriod / 60000} minutes`)
     this.renewBootstrapConnectionsTimer = this.setInterval(this.renewBootstrapConnections, this.renewBootstrapConnectionsPeriod)
 
     return true
   }
 
-  // Run garbage collections.
+  // Run bootstrap reconnect.
   async renewBootstrapConnections () {
     try {
       // Stop interval
