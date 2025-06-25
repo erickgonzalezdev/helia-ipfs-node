@@ -52,8 +52,6 @@ class PinRPC {
     this.node = config.node
     this.topic = config.topic
     this.role = config.role || 'node' // 'node' 'pinner' 'delegator'
-    this.pinTopic = `${this.topic}-pin`
-    this.stateTopic = `${this.topic}-state`
     this.onSuccessRemotePin = config.onSuccessRemotePin || this.defaultRemotePinCallback
     this.onSuccessRemoteUnpin = config.onSuccessRemoteUnpin || this.defaultRemoteUnpinCallback
     this.onSuccessRemoteProvide = config.onSuccessRemoteProvide || this.defaultRemoteProvideCallback
@@ -77,9 +75,8 @@ class PinRPC {
     this.requestRemotePin = this.requestRemotePin.bind(this)
     this.requestRemoteUnpin = this.requestRemoteUnpin.bind(this)
     this.requestRemoteProvide = this.requestRemoteProvide.bind(this)
-    this.listen = this.listen.bind(this)
-    this.parsePinMsgProtocol = this.parsePinMsgProtocol.bind(this)
-    this.parseStateMsgProtocol = this.parseStateMsgProtocol.bind(this)
+    this.listenPubsub = this.listenPubsub.bind(this)
+    this.parseMsgProtocol = this.parseMsgProtocol.bind(this)
     this.defaultRemotePinCallback = this.defaultRemotePinCallback.bind(this)
     this.addToQueue = this.addToQueue.bind(this)
     this.handlePin = this.handlePin.bind(this)
@@ -96,25 +93,29 @@ class PinRPC {
     this.defaultRemoteProvideCallback = this.defaultRemoteProvideCallback.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
     this.isDelegator = this.isDelegator.bind(this)
+    this.updateDiskSize = this.updateDiskSize.bind(this)
     // state
     this.subscriptionList = []
     this.nofitySubscriptionInterval = null
-    this.notificationTimer = 30000
+    this.notificationTimer = 5000
 
     // Add cleanup interval (run every minute)
     this.cleanupInterval = setInterval(this.cleanupQueues, 60000)
-    this.handleTopicSubscriptionInterval = setInterval(() => { this.topicHandler([this.pinTopic, this.stateTopic]) }, 90000)
+    this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 90000)
+
+    this.lastDiskSize = 0
+    this.updateDiskSizeTime = 10000 // 20 seconds
+    this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
   }
 
   async start () {
     try {
       this.log(`RPC Role : ${this.role}`)
 
-      this.listen()
-      this.topicHandler([this.pinTopic, this.stateTopic])
+      this.listenPubsub()
+      this.topicHandler()
       // Send notification message above the state topic
       this.nofitySubscriptionInterval = setInterval(async () => {
-        const diskSize = await this.node.getDiskSize()
         const msg = {
           msgType: 'notify-state',
           timeStamp: new Date().getTime(),
@@ -124,14 +125,37 @@ class PinRPC {
           role: this.role,
           onQueue: this.onQueue.length,
           onProvideQueue: this.onProvideQueue.length,
-          diskSize
+          diskSize: this.lastDiskSize
         }
+        // console.log('msg', msg)
         const msgStr = JSON.stringify(msg)
         this.log('Sending notify-state')
-        this.node.helia.libp2p.services.pubsub.publish(this.stateTopic, new TextEncoder().encode(msgStr))
+        this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
       }, this.notificationTimer)
     } catch (error) {
       this.log(error)
+      throw error
+    }
+  }
+
+  async updateDiskSize () {
+    try {
+      clearInterval(this.lastDiskSizeInterval)
+      const diskSize = await this.node.getDiskSize()
+      this.lastDiskSize = diskSize || this.lastDiskSize
+      this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
+    } catch (error) {
+      this.lastDiskSizeInterval = setInterval(this.updateDiskSize, this.updateDiskSizeTime)
+      this.log('Error on pinRPC/updateDiskSize()', error)
+    }
+  }
+
+  listenPubsub () {
+    try {
+      this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
+      return true
+    } catch (error) {
+      this.log('Error on pinRPC/listenPubsub()')
       throw error
     }
   }
@@ -146,9 +170,9 @@ class PinRPC {
       inObj.msgType = 'remote-pin'
 
       const msg = JSON.stringify(inObj)
-      this.log(`Publishing ${msg} to  ${this.pinTopic}`)
+      this.log(`Publishing ${msg} to  ${this.topic}`)
 
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msg))
 
       return true
     } catch (error) {
@@ -167,9 +191,9 @@ class PinRPC {
       inObj.msgType = 'remote-unpin'
 
       const msg = JSON.stringify(inObj)
-      this.log(`Publishing ${msg} to  ${this.pinTopic}`)
+      this.log(`Publishing ${msg} to  ${this.topic}`)
 
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msg))
 
       return true
     } catch (error) {
@@ -188,9 +212,9 @@ class PinRPC {
       inObj.msgType = 'remote-provide'
 
       const msg = JSON.stringify(inObj)
-      this.log(`Publishing ${msg} to  ${this.pinTopic}`)
+      this.log(`Publishing ${msg} to  ${this.topic}`)
 
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(msg))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msg))
 
       return true
     } catch (error) {
@@ -199,29 +223,18 @@ class PinRPC {
     }
   }
 
-  listen () {
-    try {
-      this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
-    } catch (error) {
-      this.log('Error on pinRPC/listen()')
-      throw error
-    }
-  }
-
   handlePubsubMsg (message = {}) {
     try {
+      this.log('RPC message received')
       if (message && message.detail) {
-        if (message.detail.topic === this.pinTopic) {
-          this.parsePinMsgProtocol(message)
+        if (message.detail.topic === this.topic) {
+          this.parseMsgProtocol(message)
+
           return true
         }
-        if (message.detail.topic === this.stateTopic) {
-          this.parseStateMsgProtocol(message)
-          return true
-        }
+
         return false
       }
-
       return false
     } catch (error) {
       this.log('Error in pinRPC/handleMsg()', error)
@@ -229,12 +242,12 @@ class PinRPC {
     }
   }
 
-  async parsePinMsgProtocol (message = {}) {
+  async parseMsgProtocol (message = {}) {
     try {
-      if (message.detail.topic !== this.pinTopic) return 'invalid topic'
+      if (message.detail.topic !== this.topic) return 'invalid topic'
       const msgStr = new TextDecoder().decode(message.detail.data)
       const msgObj = JSON.parse(msgStr)
-      this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
+      this.log(`RPC Msg received! :  ${message.detail.topic}: , messageType: ${msgObj.msgType}`)
       const { toPeerId, cid, msgType, fromPeerId } = msgObj
 
       // Validate if  this node peerId match with the property if it is a string.
@@ -276,29 +289,14 @@ class PinRPC {
         this.onSuccessRemoteProvide({ cid, host: this.node.peerId.toString() })
         return true
       }
-
-      return 'invalid protocol'
-    } catch (error) {
-      this.log('Error in pinRPC/parsePinMsgProtocol()', error)
-      throw error
-    }
-  }
-
-  async parseStateMsgProtocol (message = {}) {
-    try {
-      if (message.detail.topic !== this.stateTopic) return 'invalid topic'
-      const msgStr = new TextDecoder().decode(message.detail.data)
-      const msgObj = JSON.parse(msgStr)
-      this.log(`Msg received! :  ${message.detail.topic}:`, msgObj)
-      const { msgType } = msgObj
-
       if (msgType === 'notify-state') {
         this.updateSubscriptionList(msgObj)
         return true
       }
+
       return 'invalid protocol'
     } catch (error) {
-      this.log('Error in pinRPC/parsePinMsgProtocol()', error)
+      this.log('Error in pinRPC/parseMsgProtocol()', error)
       throw error
     }
   }
@@ -373,8 +371,9 @@ class PinRPC {
         cid
 
       }
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
       this.deleteFromQueueArray(inObj.cid)
+      this.addToProvideQueue(inObj)
       return true
     } catch (error) {
       this.deleteFromQueueArray(inObj.cid)
@@ -404,7 +403,7 @@ class PinRPC {
         cid
 
       }
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
       return true
     } catch (error) {
       this.log('Error on PinRPC/handleUnpin()', error)
@@ -434,7 +433,7 @@ class PinRPC {
         cid
 
       }
-      this.node.helia.libp2p.services.pubsub.publish(this.pinTopic, new TextEncoder().encode(JSON.stringify(responseMsg)))
+      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(JSON.stringify(responseMsg)))
       this.deleteFromProvideQueueArray(inObj.cid)
       return true
     } catch (error) {
@@ -575,16 +574,14 @@ class PinRPC {
     }
   }
 
-  topicHandler (topics = []) {
+  topicHandler () {
     try {
-      for (const topic of topics) {
-        this.node.helia.libp2p.services.pubsub.unsubscribe(topic)
-        this.node.helia.libp2p.services.pubsub.subscribe(topic)
-        this.log(`Subcribed to : ${topic}`)
-        const peerListeners = this.node.helia.libp2p.services.pubsub.getPeers(topic)
-        this.log(`${topic} peerListeners`, peerListeners)
+      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(this.topic)
+      this.log(`isSubscribed: ${isSubscribed}`)
+      if (!isSubscribed) {
+        this.node.helia.libp2p.services.pubsub.subscribe(this.topic)
+        this.log(`Subcribed to : ${this.topic}`)
       }
-
       return true
     } catch (error) {
       this.log('Error in PinRPC/topicHandler()', error)

@@ -1,6 +1,6 @@
 /**
  *
- *  Custom private file transfer protocol.
+ *  Custom PFTP (Private File Transfer Protocol).
  *
  *  This protocol allow to  fetch a cid  from  another  known connected peer
  *
@@ -9,21 +9,23 @@
  *
  */
 import { CID } from 'multiformats/cid'
-import { pipe } from 'it-pipe'
 import { multiaddr } from '@multiformats/multiaddr'
+import axios from 'axios'
 
 class PFTProtocol {
   constructor (config = {}) {
     if (!config.node) {
       throw new Error('Helia-IPFS-Node must be passed on PFTProtocol constructor')
     }
+    this.axios = axios
     this.protocol = '/pft/1.0.0'
-    this.topic = `${config?.topic ? config.topic : ''}-pftp-protocol`
+    this.topic = config.topic
+    this.announce = config.node.opts.announce
     this.node = config.node
+    this.selfAddress = this.node.addresses[0].toString()
     this.knownPeerAddress = config.knownPeerAddress
     this.log = this.node.log || console.log
     this.CID = CID
-    this.pipe = pipe
     this.multiaddr = multiaddr
     // bind functions
     this.handlePFTProtocol = this.handlePFTProtocol.bind(this)
@@ -34,66 +36,110 @@ class PFTProtocol {
     this.getKnownPeers = this.getKnownPeers.bind(this)
     this.handlePubsubMsg = this.handlePubsubMsg.bind(this)
     this.listenPubsub = this.listenPubsub.bind(this)
-    this.renewConnections = this.renewConnections.bind(this)
     this.removeKnownPeer = this.removeKnownPeer.bind(this)
     this.topicHandler = this.topicHandler.bind(this)
+    this.cleanKnownPeers = this.cleanKnownPeers.bind(this)
+    this.publishKnownPeers = this.publishKnownPeers.bind(this)
+    this.startIntervals = this.startIntervals.bind(this)
+    this.listenConnectionClose = this.listenConnectionClose.bind(this)
+    this.renewKnownPeerConnection = this.renewKnownPeerConnection.bind(this)
+    this.retryConnect = this.retryConnect.bind(this)
+    // this.restartNode = this.restartNode.bind(this)
+    this.sleep = this.sleep.bind(this)
 
-    this.privateAddresssStore = [] // Save al known peers for private connections
+    this.downloadFromGateway = this.downloadFromGateway.bind(this)
 
-    this.blackListAddresssStore = [] //  Save all addresses that failed to connect
+    this.privateAddresssStore = [] // Save all known peers as {address, gateway} objects
 
-    this.notificationTimer = 20000
-    this.blackListCleanupTimer = 1000 * 60 * 2
-    this.logTimerInterval = 30000
+    this.blackListAddressStore = [] //  Save all addresses that failed to connect
+    this.disconnectedPeerRecordsTime = {}
+    this.pendingReconnects = []
 
     // inject the downloadCid function to the provided node.
     this.node.pftpDownload = this.downloadCid
 
-    // renew connections timer
-    this.renewConnections = this.renewConnections.bind(this)
-    this.renewConnectionsTimeout = 60000
-    this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
-
-    this.handleTopicSubscriptionInterval = setInterval(() => { this.topicHandler([this.topic]) }, 90000)
+    // rIntervals times
+    this.notificationTimer = 6000
+    this.cleanKnownPeersTimer = 30000
+    this.logTimerInterval = 15000
+    this.renewInitialKnownPeerTimer = 10000
+    this.renewConnectionsInterval = 60000 * 1
+    this.restartNodeTime = 60000 * 0.5 // 30 minutes
   }
 
   async start () {
     this.log(`Starting on Private file transfer protocol ( PFTP) on protocol ${this.protocol}`)
-
     // add provided known peer to address store
-    this.addKnownPeer(this.knownPeerAddress)
-
+    await this.addKnownPeer({ address: this.knownPeerAddress })
+    // if (this.knownPeerAddress && !connected) { throw new Error('Cannot connect to initial known peer') }
     // handle pubsub
     this.listenPubsub()
-
-    this.topicHandler([this.topic])
-
+    this.topicHandler()
     // handle protocol
-    this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
+    // this.node.helia.libp2p.handle(this.protocol, this.handlePFTProtocol)
+    // this.listenPeerDisconnections()
+    this.listenConnectionClose()
+    this.startIntervals()
+    return true
+  }
 
-    await this.renewConnections()
-
-    this.nofitySubscriptionInterval = setInterval(async () => {
-      const msg = {
-        multiAddress: this.node.addresses[0],
-        knownPeers: this.getKnownPeers()
-      }
-      const msgStr = JSON.stringify(msg)
-      this.log('PFTP Sending addresses')
-      this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
-    }, this.notificationTimer)
-
-    // Clean Black list every 2 minutes
-    this.blackListCleanupInterval = setInterval(() => {
-      this.blackListAddresssStore = []
-    }, this.blackListCleanupTimer)
-
+  startIntervals () {
+    this.log('Starting intervals on PFT Protocol')
+    this.handleTopicSubscriptionInterval = setInterval(this.topicHandler, 80000)
+    this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+    this.nofitySubscriptionInterval = setInterval(this.publishKnownPeers, this.notificationTimer)
+    this.cleanPeerRecordsInterval = setInterval(this.cleanKnownPeers, this.cleanKnownPeersTimer)
     // Show known peers addresses every 10 seconds
     this.logPrivateAddresssStoreInterval = setInterval(() => {
       this.log('PFTP Known Peers addresses: ', this.privateAddresssStore)
     }, this.logTimerInterval)
 
-    return true
+    this.connectionsLogsInterval = setInterval(() => {
+      this.log('PFTP Connections: ', this.node.helia.libp2p.getConnections()?.length)
+    }, 10000)
+
+    setInterval(() => {
+      const mem = process.memoryUsage()
+      // console.log('mem', mem)
+      this.log(`\x1b[33mRSS: ${(mem.rss / 1024 / 1024).toFixed(2)} MB\x1b[0m`)
+    }, 2000)
+
+    setInterval(() => {
+      // Force garbage collection (if available)
+      if (global.gc) {
+        this.log('JS garbage collection running')
+        //  global.gc()
+      } else {
+        this.log('No JS garbage collection available')
+      }
+    }, 5000)
+  }
+
+  publishKnownPeers () {
+    const msg = {
+      msgType: 'known-peers',
+      multiAddress: this.selfAddress,
+      gateway: this.node.GATEWAY_URL,
+      knownPeers: this.getKnownPeers()
+    }
+    const msgStr = JSON.stringify(msg)
+    this.log('PFTP Sending addresses')
+    this.node.helia.libp2p.services.pubsub.publish(this.topic, new TextEncoder().encode(msgStr))
+  }
+
+  cleanKnownPeers () {
+    this.log('\x1b[33mCleaning know peers: \x1b[0m')
+    for (const peer of this.privateAddresssStore) {
+      const disconnectedTime = this.disconnectedPeerRecordsTime[peer.address]
+      if (disconnectedTime) {
+        const timeSinceDisconnect = Math.floor((new Date().getTime() - disconnectedTime) / 1000)
+        this.log(`\x1b[33mTime since disconnect: ${timeSinceDisconnect / 60} minutes for address: ${peer.address}\x1b[0m`)
+        // Dont remove peer if has been disconnected for less than 3 minutes
+        if (timeSinceDisconnect > 180) { // 3 minutes in seconds
+          this.removeKnownPeer(peer.address)
+        }
+      }
+    }
   }
 
   listenPubsub () {
@@ -101,43 +147,87 @@ class PFTProtocol {
       this.node.helia.libp2p.services.pubsub.addEventListener('message', this.handlePubsubMsg)
       return true
     } catch (error) {
-      this.log('Error on pinRPC/listen()')
+      this.log('Error on PFTP/listen()')
       throw error
+    }
+  }
+
+  listenConnectionClose () {
+    this.node.helia.libp2p.addEventListener('connection:close', async (evt) => {
+      const closedPeerAddr = evt.detail.remoteAddr.toString()
+      // Check if the closed connection was with a known peer
+      if (this.privateAddresssStore.some(peer => peer.address === closedPeerAddr)) {
+        this.log(`\x1b[32m Known peer disconnected: ${closedPeerAddr}\x1b[0m`)
+
+        // Record disconnection time
+        this.disconnectedPeerRecordsTime[closedPeerAddr] = new Date().getTime()
+
+        // Attempt immediate reconnection
+        try {
+          this.retryConnect(closedPeerAddr, 1)
+        } catch (error) {
+          // this.log(`\x1b[31mFailed to reconnect to ${closedPeerAddr}: ${error.message}\x1b[0m`)
+        }
+      }
+    })
+  }
+
+  async renewKnownPeerConnection () {
+    try {
+      clearInterval(this.handleReconnectsInterval)
+      for (const peer of this.privateAddresssStore) {
+        try {
+          // this disconnection trigger the connection close event, then try to reconnect and renew the connection
+          await this.node.connect(peer.address)
+          this.disconnectedPeerRecordsTime[peer.address] = 0
+          this.log(`\x1b[33mSuccessfully reconnected to peer: ${peer.address}\x1b[0m`)
+        } catch (error) {
+          this.log(`\x1b[31mFailed to reconnect to ${peer.address}: ${error.message}\x1b[0m`)
+        }
+      }
+      this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+      return true
+    } catch (error) {
+      this.log('Error in renewKnownPeerConnection()', error)
+      this.handleReconnectsInterval = setInterval(this.renewKnownPeerConnection, this.renewConnectionsInterval)
+      return false
     }
   }
 
   handlePubsubMsg (message = {}) {
     try {
+      this.log('PFTP message received')
       if (message && message.detail) {
         if (message.detail.topic === this.topic) {
           const msgStr = new TextDecoder().decode(message.detail.data)
           const msgObj = JSON.parse(msgStr)
-          this.log(`PFTP Msg received! : from  ${message.detail.topic}:`)
-          const { multiAddress, knownPeers } = msgObj
-
-          const addresses = [...knownPeers, multiAddress]
-          // Update known peers addresses
-          for (const address of addresses) {
-            this.addKnownPeer(address)
+          this.log(`PFTP Msg received! : from  ${message.detail.topic}: , messageType: ${msgObj.msgType}`)
+          const { multiAddress, knownPeers, msgType, gateway } = msgObj
+          if (msgType === 'known-peers') {
+            const providedKnownPeers = knownPeers // provided known peers from the remote node
+            providedKnownPeers.push({ address: multiAddress, gateway }) // add remote node address and gateway
+            // Update known peers addresses
+            for (const peer of providedKnownPeers) {
+              this.addKnownPeer(peer)
+            }
+            return true
           }
-
-          return true
         }
       }
       return false
     } catch (error) {
-      this.log('Error in pinRPC/handlePubsubMsg()', error)
+      this.log('Error in PFTP/handlePubsubMsg()', error)
       return false
     }
   }
 
   async handlePFTProtocol ({ stream }) {
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+    const source = stream.source
+    const sink = stream.sink
     try {
-      this.log('New PFT connection')
-
-      const decoder = new TextDecoder()
-      const source = stream.source
-      const sink = stream.sink
+      this.log('\x1b[32mNew PFT connection established\x1b[0m')
 
       let cid = ''
 
@@ -150,20 +240,24 @@ class PFTProtocol {
       const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
 
       if (!has) {
-        throw new Error('CID not found!')
+        throw new Error('CID_NOT_FOUND')
         // Obtener el stream del archivo desde UnixFS
       }
 
-      const fileStream = this.node.ufs.cat(cid) // fs = unixfs(helia)
+      const stats = await this.node.getStat(cid)
+      const fileSize = Number(stats.fileSize)
 
-      // Pipe para enviar los chunks directamente
-      await this.pipe(
-        fileStream, // Source: archivo dividido en chunks
-        sink // Sink: enviar directamente a través del stream
-      )
+      // Send initial metadata
+      await sink([encoder.encode(JSON.stringify({ fileSize }))])
+
       return true
     } catch (error) {
       this.log('Error in handlePFTProtocol(): ', error)
+      try {
+        await sink([encoder.encode(JSON.stringify({ error: error.message }))])
+      } catch (err) {
+        this.log('Error sending error message:', err)
+      }
       return false
     } finally {
       if (stream) {
@@ -176,42 +270,75 @@ class PFTProtocol {
     }
   }
 
-  async fetchCidFromPeer (cid, address) {
+  async fetchCidFromPeer (inObj = {}) {
+    const { cid, address } = inObj
     let stream
-    try {
-      this.log('Request new content')
-      stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
-      this.log('Stream Id', stream.id)
-      const encoder = new TextEncoder()
+    let retryCount = 0
+    const MAX_RETRIES = 5
+    const RETRY_DELAY = 2500 // 2 seconds
 
-      // Enviar el CID que queremos
-      await stream.sink([encoder.encode(cid)])
+    while (retryCount < MAX_RETRIES) {
+      try {
+        this.log(`\x1b[32mRequest new content (attempt ${retryCount + 1}/${MAX_RETRIES})\x1b[0m`)
+        stream = await this.node.helia.libp2p.dialProtocol([this.multiaddr(address)], this.protocol)
+        this.log('Stream Id', stream.id)
+        const encoder = new TextEncoder()
 
-      const cidAdded = await this.node.ufs.addBytes(async function * () {
+        // Send the CID we want
+        await stream.sink([encoder.encode(cid)])
+
+        let fileSize = 0
+        let error = false
         for await (const chunk of stream.source) {
-          yield chunk.subarray()
+          try {
+            const message = JSON.parse(new TextDecoder().decode(chunk.bufs[0]))
+            this.log('message', message)
+            fileSize = message.fileSize
+            error = message.error
+          } catch (error) {
+            this.log('Error parsing message: ', error)
+          }
         }
-      }())
+        if (error) {
+          throw new Error(error)
+        }
 
-      this.log('cidAdded', cidAdded)
-      if (cidAdded.toString() !== cid.toString()) {
-        throw new Error('cid does not match!')
-      }
-      this.log('downloaded cid', cid)
-      return true
-    } catch (error) {
-      this.log('Error in fetchCidFromPeer(): ', error)
-      return false
-    } finally {
-      console.log('try to close stream')
-      if (stream) {
-        // Ensure stream is properly closed
-        await stream.close().catch(err => {
-          this.log('Error closing stream:', err)
-        })
-        this.log('fetchCidFromPeer closed stream')
+        if (fileSize === 0) {
+          throw new Error('File size not found!')
+        }
+
+        await this.downloadFromGateway(inObj)
+        const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+        if (!has) {
+          throw new Error('CID not added!')
+        }
+        this.log(`\x1b[32m Successfully downloaded cid: ${cid} from ${address}\x1b[0m`)
+        return true
+      } catch (error) {
+        this.log(`\x1b[31mError in fetchCidFromPeer (attempt ${retryCount + 1}): ${error.message}\x1b[0m`)
+        retryCount++
+        if (error.message === 'CID_NOT_FOUND') {
+          this.log('\x1b[31mCID not found, giving up\x1b[0m')
+          return false
+        }
+        if (retryCount >= MAX_RETRIES) {
+          this.log('\x1b[31mMax retries reached, giving up\x1b[0m')
+          return false
+        }
+
+        // Wait before retrying
+        await this.sleep(RETRY_DELAY * retryCount)
+      } finally {
+        if (stream) {
+          await stream.close().catch(err => {
+            this.log('Error closing stream:', err)
+          })
+          this.log('fetchCidFromPeer closed stream')
+        }
       }
     }
+
+    return false
   }
 
   async downloadCid (cid) {
@@ -224,13 +351,17 @@ class PFTProtocol {
         throw new Error('No private addresss store found')
       }
 
-      for (const address of this.privateAddresssStore) {
-        const result = await this.fetchCidFromPeer(cid, address)
-        // console.log('result', result)
+      for (const peer of this.privateAddresssStore) {
+        this.log(`downloadCid fetch addr${peer.address}`)
+        const inObj = { cid, address: peer.address, gateway: peer.gateway }
+        const result = await this.downloadFromGateway(inObj)
+        this.log(`downloadCid fetch addr${peer.address} result ${result}`)
         if (result) {
+          this.log('CID found on PFTP')
           return true
         }
       }
+      this.log('NOT CID found on PFTP')
       return false
     } catch (error) {
       this.log('Error in downloadCid(): ', error)
@@ -238,27 +369,37 @@ class PFTProtocol {
     }
   }
 
-  addKnownPeer (address) {
+  async addKnownPeer (inObj = {}) {
     try {
+      const { address, gateway } = inObj
       if (!address) {
         throw new Error('Address is required')
       }
+      // dont add the node itself
       if (address === this.node.addresses[0].toString()) {
         return false
       }
-      if (this.privateAddresssStore.includes(address)) {
-        return true
-      }
-      /**
-    * If the address is in the black list, ignore it
-    */
-      if (this.blackListAddresssStore.includes(address)) {
+      // dont add the node itself
+      if (address.includes(this.node.peerId.toString())) {
         return false
       }
-      this.privateAddresssStore.push(address)
+
+      if (this.blackListAddressStore.includes(address)) {
+        return false
+      }
+      // Check if address already exists
+      if (this.privateAddresssStore.some(peer => peer.address === address)) {
+        // update gateway port  to keep updated
+        this.privateAddresssStore.find(peer => peer.address === address).gateway = gateway
+        return true
+      }
+      await this.node.connect(address)
+
+      this.privateAddresssStore.push({ address, gateway })
+      this.log(`Successfully connected to peer: ${address}`)
       return true
     } catch (error) {
-      // this.log('Error in addKnownPeer(): ', error)
+      this.log('Error in addKnownPeer(): ', error.message)
       return false
     }
   }
@@ -275,11 +416,11 @@ class PFTProtocol {
       if (address === this.knownPeerAddress) {
         throw new Error('Cannot remove initial known peer address')
       }
-      const index = this.privateAddresssStore.indexOf(address)
+
+      const index = this.privateAddresssStore.findIndex(peer => peer.address === address)
       if (index === -1) {
         return false
       }
-      this.blackListAddresssStore.push(address)
       this.privateAddresssStore.splice(index, 1)
       return true
     } catch (error) {
@@ -288,46 +429,75 @@ class PFTProtocol {
     }
   }
 
-  // Renew subscription connection
-  async renewConnections () {
+  topicHandler () {
     try {
-      clearInterval(this.reconnectConnectionsInterval)
-      for (const address of this.privateAddresssStore) {
-        // Try to connect to each address into the private addresss store
-        try {
-          const connection = await this.node.connect(address)
-          const ttl = await this.node.helia.libp2p.services.ping.ping(multiaddr(address))
-          console.log('ttl', ttl)
-          this.log(`Successfully connected to peer : ${connection.remoteAddr}`)
-        } catch (dialError) {
-          this.log(`Failed to connect to ${address}: ${dialError.message}`)
-          this.removeKnownPeer(address)
-          continue // Try next address if available
-        }
+      const isSubscribed = this.node.helia.libp2p.services.pubsub.getTopics().includes(this.topic)
+      this.log(`isSubscribed: ${isSubscribed}`)
+      if (!isSubscribed) {
+        this.node.helia.libp2p.services.pubsub.subscribe(this.topic)
+        this.log(`Subcribed to : ${this.topic}`)
       }
-      this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
       return true
     } catch (error) {
-      this.reconnectConnectionsInterval = setInterval(this.renewConnections, this.renewConnectionsTimeout)
-      this.log('Error in PFTProtocol/renewConnections()', error.message)
+      this.log('Error in PFTP/topicHandler()', error)
       return false
     }
   }
 
-  topicHandler (topics = []) {
+  async retryConnect (addr, attempt = 1) {
+    const MAX_ATTEMPTS = 5
+    const RETRY_DELAY = 2000 // 1 minute in milliseconds
+
     try {
-      for (const topic of topics) {
-        this.node.helia.libp2p.services.pubsub.unsubscribe(topic)
-        this.node.helia.libp2p.services.pubsub.subscribe(topic)
-        this.log(`Subcribed to : ${topic}`)
-        const peerListeners = this.node.helia.libp2p.services.pubsub.getPeers(topic)
-        this.log(`${topic} peerListeners`, peerListeners)
+      // Attempt to connect to the node
+      const connection = await this.node.connect(addr)
+      this.log(`\x1b[32mSuccessfully connected to ${addr} on attempt ${attempt}\x1b[0m`)
+      this.disconnectedPeerRecordsTime[addr] = 0
+      return connection
+    } catch (error) {
+      this.log(`\x1b[33mFailed to connect to ${addr} (attempt ${attempt}/${MAX_ATTEMPTS}): ${error.message}\x1b[0m`)
+
+      if (attempt >= MAX_ATTEMPTS) {
+        this.log(`\x1b[31mMax attempts (${MAX_ATTEMPTS}) reached. Giving up.\x1b[0m`)
+        return false
       }
 
-      return true
+      // Wait for RETRY_DELAY before next attempt
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+
+      // Recursive call for next attempt
+      return this.retryConnect(addr, attempt + 1)
+    }
+  }
+
+  // Add sleep utility function
+  async sleep (ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  async downloadFromGateway (inObj = {}) {
+    try {
+      const { cid, gateway } = inObj
+      if (!gateway) {
+        throw new Error('Gateway is required')
+      }
+      const GATEWAY_URL = `${gateway}/${cid}`
+      this.log('GATEWAY_URL TO DOWNLOAD', GATEWAY_URL)
+      const response = await this.axios({
+        method: 'get',
+        url: `${GATEWAY_URL}`,
+        responseType: 'stream'
+      })
+
+      const cidAdded = await this.node.ufs.addByteStream(response.data)
+
+      const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+
+      this.log('cidAdded', cidAdded)
+
+      return has
     } catch (error) {
-      this.log('Error in PinRPC/topicHandler()', error)
-      return false
+      this.log('Error on downloadFromGateway:', error.message)
     }
   }
 }

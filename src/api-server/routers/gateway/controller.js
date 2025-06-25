@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type'
 import Stream from 'stream'
+import { CID } from 'multiformats/cid'
 
 const CHUNK_SIZE = 10 ** 6 * 10// 10MB
 
@@ -8,12 +9,23 @@ export default class Gateway {
   constructor (config = {}) {
     this.config = config
     this.node = config.node
+    this.pinOnGetContent = config.pinOnGetContent // true || false >  Get content pinned after fetch
     this.fs = fs
+    this.CID = CID
     this.getContent = this.getContent.bind(this)
     this.handleError = this.handleError.bind(this)
     this.setHelloWorld = this.setHelloWorld.bind(this)
     this.getConnections = this.getConnections.bind(this)
     this.log = this.node.log || console.log
+    this.downloadContent = this.downloadContent.bind(this)
+    this.parseFolderFormat = this.parseFolderFormat.bind(this)
+    this.streamContent = this.streamContent.bind(this)
+    this.getStreamFileType = this.getStreamFileType.bind(this)
+    this.lsDirectoryContent = this.lsDirectoryContent.bind(this)
+    this.pftpDownload = this.pftpDownload.bind(this)
+    this.tryToPinContent = this.tryToPinContent.bind(this)
+    this.tryToUnpinContent = this.tryToUnpinContent.bind(this)
+    this.getMetadata = this.getMetadata.bind(this)
   }
 
   async getContent (ctx) {
@@ -46,11 +58,63 @@ export default class Gateway {
         this.log(`Node Lazy Downloading for ${cidToFetch}`)
         await this.node.lazyDownload(cidToFetch)
       }
+      // console.log('pinOnGetContent',this.pinOnGetContent)
+      if (this.pinOnGetContent) {
+        await this.tryToPinContent(cidToFetch)
+      }
 
       // Try to stream content.
       const streamed = await this.streamContent(ctx, cidToFetch)
       console.log('streamed', streamed)
       if (streamed) return
+
+      // Send all content
+      const totalFileChunks = await this.node.getContent(cidToFetch, { offset: 0, length: fileSize })
+      const fileTypeRes = await fileTypeFromBuffer(totalFileChunks)
+      const fileType = fileTypeRes || { mime: 'text/plain' }
+
+      ctx.type = fileType.mime
+      ctx.body = totalFileChunks
+    } catch (error) {
+      console.log(error)
+      this.handleError(ctx, error)
+    }
+  }
+
+  async downloadContent (ctx) {
+    try {
+      const { cid } = ctx.params
+      // try to download the cid on the private nerwork first
+      await this.node.pftpDownload(cid)
+
+      let cidToFetch = cid
+      // Verify if the cid is a folder
+      const parsed = await this.parseFolderFormat(ctx)
+
+      // If a result was sent.
+      if (parsed && !parsed.cid) return
+
+      // If new cid exist
+      if (parsed.cid) cidToFetch = parsed.cid
+      console.log('cidToFetch', cidToFetch)
+
+      // Get file stats
+      const stats = await this.node.getStat(cidToFetch)
+
+      const fileSize = Number(stats.fileSize)
+      this.log(`${cidToFetch} fileSize : ${fileSize}`)
+      const localSize = Number(stats.localFileSize)
+      this.log(`${cidToFetch} localSize : ${localSize}`)
+
+      // Try to download the content before send it.
+      if (localSize < fileSize) {
+        this.log(`Node Lazy Downloading for ${cidToFetch}`)
+        await this.node.lazyDownload(cidToFetch)
+      }
+
+      if (this.pinOnGetContent) {
+        await this.tryToPinContent(cidToFetch)
+      }
 
       // Send all content
       const totalFileChunks = await this.node.getContent(cidToFetch, { offset: 0, length: fileSize })
@@ -203,6 +267,22 @@ export default class Gateway {
     }
   }
 
+  async pftpDownload (ctx) {
+    try {
+      const { cid } = ctx.params
+      this.log('\x1b[36m%s\x1b[0m', `PFTP Gateway Download Start For CID: ${cid}`)
+      const has = await this.node.helia.blockstore.has(this.CID.parse(cid))
+      if (!has) {
+        throw new Error('CID not found!')
+      }
+      // Send all content
+      const totalFileChunks = await this.node.getContent(cid)
+      ctx.body = totalFileChunks
+    } catch (error) {
+      this.handleError(ctx, error)
+    }
+  }
+
   handleError (ctx, err) {
     if (err.status) {
       if (err.message) {
@@ -219,6 +299,36 @@ export default class Gateway {
     try {
       const connections = await this.node.getConnections()
       ctx.body = { connections: connections.length }
+    } catch (error) {
+      this.handleError(ctx, error)
+    }
+  }
+
+  async tryToPinContent (cid) {
+    try {
+      await this.node.pinCid(cid)
+      this.log(`Content ${cid} pinned from gateway`)
+    } catch (error) { /* ignore error */ }
+  }
+
+  async tryToUnpinContent (cid) {
+    try {
+      await this.node.unPinCid(cid)
+      this.log(`Content ${cid} unpinned from gateway`)
+    } catch (error) { /* ignore error */ }
+  }
+
+  async getMetadata (ctx) {
+    try {
+      const { cid } = ctx.params
+      this.log(`Getting metadatas for ${cid}`)
+
+      const tsMetadata = this.node.tsMetadata
+      const metadata = await tsMetadata.getMetadata(cid)
+      console.log('metadata', metadata)
+
+      if (!metadata) throw new Error('Not Found!')
+      ctx.body = metadata
     } catch (error) {
       this.handleError(ctx, error)
     }

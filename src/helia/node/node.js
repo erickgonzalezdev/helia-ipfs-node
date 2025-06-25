@@ -14,7 +14,7 @@ import { logger, disable } from '@libp2p/logger'
 import path from 'path'
 import { bootstrap } from '@libp2p/bootstrap'
 
-import { bootstrapConfig } from '../util/bootstrap.js'
+import { bootstrapConfig } from '../../util/bootstrap.js'
 
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 
@@ -36,10 +36,13 @@ import { publicIpv4 } from 'public-ip'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import getFolderSize from 'get-folder-size'
 
-import { sleep } from '../util/util.js'
+import { sleep } from '../../util/util.js'
 import * as Libp2pCryptoKeys from '@libp2p/crypto/keys'
 
 import { peerIdFromPrivateKey } from '@libp2p/peer-id'
+
+import TimeStampMetadata from './ts-metadata.js'
+import BootstrapReconnect from './bootstrap-reconnect.js'
 
 class HeliaNode {
   constructor (inputOptions = {}) {
@@ -64,6 +67,7 @@ class HeliaNode {
     this.helia = null
     this.ufs = null
     this.ip4 = null
+    this.tsMetadata = null
     this.addresses = [] // node multi address
 
     this.start = this.start.bind(this)
@@ -72,9 +76,11 @@ class HeliaNode {
     this.upload = this.upload.bind(this)
     this.uploadDir = this.uploadDir.bind(this)
     this.pftpDownload = this.pftpDownload.bind(this)
+    this.GATEWAY_PORT = null // gateway port , replaced  by gateway library
 
     // this.uploadObject = this.uploadObject.bind(this)
     // this.uploadString = this.uploadString.bind(this)
+    this.getIPByRemoteAddress = this.getIPByRemoteAddress.bind(this)
     this.uploadStrOrObj = this.uploadStrOrObj.bind(this)
     this.uploadFile = this.uploadFile.bind(this)
     // this.listProviders = this.listProviders.bind(this)
@@ -113,7 +119,8 @@ class HeliaNode {
       relay: this.opts.relay,
       announce: this.opts.announce,
       serverDHTProvide: this.opts.serverDHTProvide,
-      maxConnections: this.opts.maxConnections || 100
+      maxConnections: this.opts.maxConnections || 300,
+      announceAddr: this.opts.announceAddr
     }
 
     let existingKey
@@ -163,14 +170,20 @@ class HeliaNode {
           '/webrtc'
         ],
         announce: this.opts.announce
-          ? [
-            `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`,
-            `/ip4/${this.ip4}/tcp/${this.opts.wsPort}/ws`
-            ]
+          ? this.opts.announceAddr
+            ? [
+                this.opts.announceAddr
+              ]
+            : [
+                `/ip4/${this.ip4}/tcp/${this.opts.tcpPort}`
+              ]
           : []
       },
       connectionManager: {
-        maxConnections: this.opts.maxConnections || 50
+        autoDial: true,
+        maxConnections: this.opts.maxConnections || 50,
+        minConnections: this.opts.maxConnections ? this.opts.maxConnections * 0.5 : 10
+
       },
       transports: [
         tcp({ logger: logger('upgrade') }),
@@ -198,13 +211,14 @@ class HeliaNode {
           protocol: '/ipfs/kad/1.0.0',
           peerInfoMapper: removePrivateAddressesMapper,
           clientMode: !this.opts.serverDHTProvide,
-          queryTimeout: 20000, // 20 seconds
-          protocolPrefix: '/ipfs', // Standard prefix for IPFS DHT
-          reprovide: this.opts.serverDHTProvide
+          queryTimeout: 30000, // 30 seconds
+          protocolPrefix: '/ipfs' // Standard prefix for IPFS DHT
+          /*     reprovide: this.opts.serverDHTProvide
             ? {
-                concurrency: 10
+                concurrency: 5,
+                interval: 10000
               }
-            : false
+            : false */
         })
       },
       logger: disable()
@@ -230,7 +244,7 @@ class HeliaNode {
       const datastore = new this.FsDatastore(dataStorePath)
 
       const keyPair = await Libp2pCryptoKeys.generateKeyPairFromSeed('Ed25519', Buffer.from(options.nodeKey))
-
+      this.keyPair = keyPair
       const peerId = peerIdFromPrivateKey(keyPair)
       this.log(`Peer Id : ${peerId}`)
 
@@ -242,9 +256,11 @@ class HeliaNode {
       this.log(`RELAY : ${!!this.opts.relay}`)
       this.log(`DHT SERVER MODE : ${!!this.opts.serverDHTProvide}`)
       this.log(`Announce Public Addresses: ${!!this.opts.announce}`)
-      this.log(`MAX CONNECTIONS : ${this.opts.maxConnections}`)
+      this.log(`MAX CONNECTIONS : ${libp2pInputs.connectionManager.maxConnections}`)
+      this.log(`MIN CONNECTIONS : ${libp2pInputs.connectionManager.minConnections}`)
 
       const libp2p = await this.createLibp2p(libp2pInputs)
+      //  await libp2p.services.dht.reprovider.stop()
 
       this.peerId = peerId
       // Create helia node
@@ -254,8 +270,12 @@ class HeliaNode {
         libp2p
       })
 
+      this.tsMetadata = new TimeStampMetadata({ datastore, blockstore })
       const multiaddrs = await this.getMultiAddress()
       this.log('Multiaddrs: ', multiaddrs)
+
+      const bootstrapReconnect = new BootstrapReconnect({ node: this })
+      await bootstrapReconnect.start()
 
       this.ufs = this.unixfs(this.helia)
       await this.saveKey(options.nodeKey, `${options.storePath}/${this.KeyPath}`)
@@ -417,11 +437,12 @@ class HeliaNode {
       if (!CID || typeof CID !== 'string') {
         throw new Error('CID string is required.')
       }
-
       const chunks = []
       for await (const chunk of this.ufs.cat(CID, options)) {
         chunks.push(chunk)
       }
+
+      await this.tsMetadata.updateMetadata(CID, 'lastAccessAt')
 
       return Buffer.concat(chunks)
     } catch (error) {
@@ -457,12 +478,10 @@ class HeliaNode {
           ready = true
         }
       } while (!ready)
-
       this.downloading[cid] = {
         cid,
         timestamp: Date.now()
       }
-
       // console.log(stats)
       let chunkLength = 0
       while (chunkLength < Number(fileSize)) {
@@ -532,6 +551,7 @@ class HeliaNode {
         for await (const pinnedCid of this.helia.pins.add(CID.parse(cid))) {
           resolves(pinnedCid)
         }
+        await this.tsMetadata.updateMetadata(cid, 'pinnedAt')
         this.log('Pinned content.!')
       } catch (error) {
         this.log('Error in pinCid()', error)
@@ -550,6 +570,7 @@ class HeliaNode {
         for await (const unpinnedCid of this.helia.pins.rm(CID.parse(cid))) {
           resolves(unpinnedCid)
         }
+        await this.tsMetadata.updateMetadata(cid, 'unpinnedAt')
       } catch (error) {
         this.log('Error in unPinCid()', error)
         reject(error)
@@ -563,7 +584,7 @@ class HeliaNode {
       try {
         const pins = []
         for await (const cid of this.helia.pins.ls()) {
-          pins.push(cid)
+          pins.push(cid.cid)
         }
 
         resolves(pins)
@@ -626,18 +647,19 @@ class HeliaNode {
       this.log(`Node size :  ${mbSize} MB`)
       return mbSize
     } catch (err) {
-      this.log('Error in getDiskSize()', err)
+      this.log('Error in getDiskSize()', err.message)
       return false
     }
   }
 
-  async provideCID (cid, options) {
+  async provideCID (cid, options = {}) {
     try {
       if (!cid || typeof cid !== 'string') {
         throw new Error('CID string is required.')
       }
       await this.helia.routing.provide(CID.parse(cid), options)
       this.log(`Provided cid ${cid}`)
+      await this.tsMetadata.updateMetadata(cid, 'providedAt')
       return true
     } catch (err) {
       this.log('Error in provideCID()', err)
@@ -669,6 +691,11 @@ class HeliaNode {
   // this function will be replaced if u provide this node to the pftp protocol.
   async pftpDownload (cid) {
     return false
+  }
+
+  getIPByRemoteAddress (address) {
+    const ip = address.split('/')[2]
+    return ip
   }
 }
 
