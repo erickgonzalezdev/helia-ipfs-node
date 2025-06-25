@@ -16,6 +16,7 @@ class RouterHanlder {
     this.router.get('/connections', this.controller.getConnections)
     this.router.get('/download/:cid', this.controller.downloadContent)
     this.router.get('/pftp/:cid', this.controller.pftpDownload)
+    this.router.get('/metadata/:cid', this.controller.getMetadata)
     this.router.get('/:cid/:name', this.controller.getContent)
     this.router.get('/:cid', this.controller.getContent)
 

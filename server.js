@@ -24,7 +24,7 @@ const serverDHTProvide = process.env.SERVER_DHT_PROVIDE // Start a DHT server to
 const role = process.env.ROLE || 'node' // 'node' 'pinner' 'delegator'
 const maxConnections = process.env.MAX_CONNECTIONS ? process.env.MAX_CONNECTIONS : 100
 const announceAddr = process.env.ANNOUNCE_ADDR ? process.env.ANNOUNCE_ADDR : ''
-const reproviderPeriod = process.env.REPROVIDER_PERIOD ? process.env.REPROVIDER_PERIOD : 60 // minutes
+const reproviderPeriod = process.env.REPROVIDER_PERIOD ? process.env.REPROVIDER_PERIOD : 30 // minutes
 
 //  Initialize A node with tools.
 const start = async () => {

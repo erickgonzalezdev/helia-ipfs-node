@@ -19,7 +19,9 @@ export default class Reprovider {
     this.log = this.node.log || console.log
     // State
     this.period = this.config.period || 60 // 1 hour default
-    this.reproviderPeriod = 60000 * this.period // provided on minutes
+    this.reproviderPeriod = 60000 * this.period // check for reprovider every determinated minutes
+
+    this.minConnections = 6
 
     this.reprovideOnTimeDiff = this.config.reprovideOnTimeDiff || 1000 * 60 * 60 * 24 // 24 hours
 
@@ -44,6 +46,13 @@ export default class Reprovider {
     try {
       this.log('Starting content reprovide process...')
 
+      const cnn = this.node.getConnections()
+      if (cnn.length < this.minConnections) {
+        this.log('Insufficients connections for reprovider')
+        this.log(`Connections found :${cnn.length} , required : ${this.minConnections}`)
+        return
+      }
+
       const metadataLib = this.node.tsMetadata
       const metadatas = await metadataLib.getAllMetadatas()
       this.log('Metadatas to check for reprovide:', metadatas.length)
@@ -63,6 +72,7 @@ export default class Reprovider {
           }
 
           // Verify if cid has been provided
+          // previously provided is require for re-provider
           const providedAt = metadata.providedAt
           if (metadata.providedAt) {
             const now = new Date().getTime()

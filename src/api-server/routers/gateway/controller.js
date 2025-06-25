@@ -25,6 +25,7 @@ export default class Gateway {
     this.pftpDownload = this.pftpDownload.bind(this)
     this.tryToPinContent = this.tryToPinContent.bind(this)
     this.tryToUnpinContent = this.tryToUnpinContent.bind(this)
+    this.getMetadata = this.getMetadata.bind(this)
   }
 
   async getContent (ctx) {
@@ -315,5 +316,21 @@ export default class Gateway {
       await this.node.unPinCid(cid)
       this.log(`Content ${cid} unpinned from gateway`)
     } catch (error) { /* ignore error */ }
+  }
+
+  async getMetadata (ctx) {
+    try {
+      const { cid } = ctx.params
+      this.log(`Getting metadatas for ${cid}`)
+
+      const tsMetadata = this.node.tsMetadata
+      const metadata = await tsMetadata.getMetadata(cid)
+      console.log('metadata', metadata)
+
+      if (!metadata) throw new Error('Not Found!')
+      ctx.body = metadata
+    } catch (error) {
+      this.handleError(ctx, error)
+    }
   }
 }
